@@ -1,0 +1,14 @@
+{
+  "default_server_config": {
+    "m.homeserver": {
+      "base_url": "https://moatazs-mac-mini.tailef80eb.ts.net:8444/",
+      "server_name": "army.local"
+    }
+  },
+  "brand": "Army Hub",
+  "disable_custom_urls": true,
+  "disable_guests": true,
+  "features": {},
+  "default_theme": "dark",
+  "permalink_prefix": "https://moatazs-mac-mini.tailef80eb.ts.net:8445"
+}

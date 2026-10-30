@@ -1,0 +1,25 @@
+matrix:
+  homeserver: http://127.0.0.1:8010
+  user_id: "@example-agent:army.local"
+  access_token: replace-at-runtime
+  device_id: replace-at-runtime
+  allowed_users:
+    - "@mo:army.local"
+    - "@hermes-mini:army.local"
+    - "@dsh-mini:army.local"
+  allowed_rooms:
+    - "!replace-with-private-room-id:army.local"
+agent:
+  id: example-agent
+  display_name: Example Agent
+  command: [/absolute/path/to/harness, acp]
+  cwd: /absolute/path/to/project/workspace
+  environment:
+    NO_BROWSER: "1"
+policy:
+  max_agent_turns: 6
+  min_turn_interval_seconds: 2
+  prompt_timeout_seconds: 600
+  allow_agent_senders: true
+  max_message_chars: 40000
+state_path: /absolute/path/to/ignored/runtime/state.json

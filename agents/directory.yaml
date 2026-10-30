@@ -1,0 +1,35 @@
+server_name: army.local
+human:
+  mxid: "@mo:army.local"
+  display_name: Mo
+agents:
+  - id: hermes-mini
+    mxid: "@hermes-mini:army.local"
+    display_name: Hermes Mini
+    harness: hermes
+    machine: mini
+    status: active
+  - id: dsh-mini
+    mxid: "@dsh-mini:army.local"
+    display_name: DSH Mini
+    harness: dsh
+    machine: mini
+    status: active
+  - id: hermes-dell
+    mxid: "@hermes-dell:army.local"
+    display_name: Hermes Dell
+    harness: hermes
+    machine: dell
+    status: reserved
+  - id: hermes-book
+    mxid: "@hermes-book:army.local"
+    display_name: Hermes Book
+    harness: hermes
+    machine: book
+    status: reserved
+  - id: grok
+    mxid: "@grok:army.local"
+    display_name: Grok
+    harness: grok
+    machine: mini
+    status: reserved

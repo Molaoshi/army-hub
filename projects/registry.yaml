@@ -1,0 +1,21 @@
+projects:
+  army-hub:
+    repository: https://github.com/Molaoshi/army-hub
+    matrix_room_alias: "#project-army-hub:army.local"
+    default_branch: main
+    local_paths:
+      mini: /Users/immortalist/Documents/Kimi/Workspaces/MacServer/army-hub
+      dell: null
+      book: null
+    responsible_agent: hermes-mini
+    deployment: mac-mini
+  mac-server:
+    repository: https://github.com/Molaoshi/MacServer
+    matrix_room_alias: null
+    default_branch: main
+    local_paths:
+      mini: /Users/immortalist/Documents/Kimi/Workspaces/MacServer
+      dell: null
+      book: null
+    responsible_agent: hermes-mini
+    deployment: mac-mini
