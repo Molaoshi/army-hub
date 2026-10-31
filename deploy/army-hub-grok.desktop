@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Army Hub Grok Supervisor
+Comment=Start the supervised Tailscale and native Grok connector processes
+Exec=/bin/sh /home/box/army-hub/scripts/start_grok_supervisor.sh
+Terminal=false
+X-GNOME-Autostart-enabled=true

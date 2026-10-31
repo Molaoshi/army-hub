@@ -6,6 +6,19 @@ pid_is_live() {
   [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null
 }
 
+if pid_is_live "$ROOT/.runtime/grok-supervisord.pid"; then
+  config="$ROOT/deploy/grok-supervisord.conf"
+  ctl="$ROOT/.venv-service/bin/supervisorctl"
+  status=$("$ctl" -c "$config" status army-grok)
+  case "$status" in
+    *RUNNING*)
+      echo "Native Grok gateway connector is already supervised and running."
+      exit 0
+      ;;
+  esac
+  exec "$ctl" -c "$config" start army-grok
+fi
+
 if pid_is_live "$ROOT/.runtime/grok.pid"; then
   echo "Refusing to start: legacy Grok connector is still running." >&2
   exit 1
