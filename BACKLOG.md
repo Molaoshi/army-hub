@@ -6,10 +6,11 @@
 - Add an automatic login-start mechanism that works with macOS privacy protection without weakening TCC or moving the canonical repository.
 - Add encrypted off-Mac backup and repeat the full restore drill on another machine.
 - Add Dell and Book connectors only after local end-to-end acceptance remains green; join their reserved identities to the intended rooms.
+- Replace Grok's quick tunnel with a named tunnel/stable hostname and add its non-ACP connector to Agent Manager discovery/control.
 
 ## Later
 
-- Add Grok through the same explicit-mention protocol after its harness adapter is ready.
+- Add failure-injection coverage for Grok webhook retry, tunnel interruption, connector restart between acceptance and callback, and expired/duplicate callbacks.
 - Add interactive Matrix approval for ACP tool-permission requests; keep failing closed until then.
 - Add failure-injection tests for ACP process death, `session/load`, Matrix interruption, and connector restart during a prompt.
 - Replace broad GitHub credentials with a repository-scoped GitHub App and enforce branch protection/required checks.

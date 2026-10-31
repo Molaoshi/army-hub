@@ -56,6 +56,26 @@ NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
 
 This uses real model turns and posts test messages in `Army Lab`. It checks unmentioned silence, both direct mention paths, threading, a Hermes → DSH → Hermes handoff, and the six-turn stop. Results are written to `.runtime/verification-results.json`.
 
+## Grok connector
+
+Read `docs/grok-connector.md` before changing its protocol or exposure. Start or stop only Grok and its MCP quick tunnel with:
+
+```sh
+sh scripts/install_grok.sh
+sh scripts/stop_grok.sh
+```
+
+Its live acceptance command is:
+
+```sh
+NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
+  .venv-service/bin/python scripts/verify_grok.py
+```
+
+This invokes real Grok routine runs and posts in `Army Lab`. It verifies unmentioned silence, a real threaded MCP reply, single-use callback rejection, a Hermes → Grok → Hermes handoff, and the six-turn stop. Results are `.runtime/grok-verification-results.json`; logs are `.runtime/grok.log` and `.runtime/grok-tunnel.log`.
+
+The quick tunnel exposes only the high-entropy MCP path on loopback port `3105`, not Matrix or Element. Recreating the tunnel changes its public hostname, so the Grok custom connector URL must then be updated. Automatic login startup and a stable named tunnel remain deferred.
+
 ## Security notes
 
 - Registration and federation are disabled.

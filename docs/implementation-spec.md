@@ -11,7 +11,8 @@ A private, mobile-compatible collaboration hub for Mo and agents running Hermes,
 - Matrix registration and federation are disabled.
 - Every human and agent has a separate Matrix identity.
 - Agents connect through a harness-neutral ACP bridge. Hermes and DSH therefore share identical admission, threading, session, and anti-loop behavior.
-- The bridge is supervised and restores its Matrix sync position and ACP session map across restarts.
+- Grok uses a separate adapter: an explicit Matrix mention signs a cloud automation webhook, and Grok answers through a narrowly scoped Streamable HTTP MCP tool. Its public tunnel exposes only that tool, never Matrix or Element.
+- The bridge is supervised and restores its Matrix sync position and ACP session map across restarts. Grok separately restores its Matrix cursor and pending single-use reply grants.
 - iPhones use Element over Tailscale. No agent credentials are stored on phones.
 
 ## Rooms
@@ -37,7 +38,7 @@ Room creation and invitations are restricted to Mo. Agents may send ordinary mes
 
 - A top-level mention creates a response thread rooted at that event.
 - A mention inside a thread remains in that thread.
-- The thread root maps to one durable harness session per agent.
+- For ACP agents, the thread root maps to one durable harness session per agent. Grok instead starts an asynchronous cloud routine per mention while Matrix holds the shared thread; it does not import Grok Bot's primary-chat history or memory.
 - Agents may delegate with a structured handoff containing target, task, repository, scope, required verification, and expected result.
 - An agent must not impersonate another agent or claim work it did not perform.
 
@@ -77,9 +78,9 @@ Protected branches forbid direct pushes, force pushes, and repository deletion. 
 ## Rollout
 
 1. Deploy Matrix/PostgreSQL/Element and tailnet HTTPS.
-2. Provision Mo, Hermes Mini, and DSH Mini; reserve Dell, Book, and Grok identities.
+2. Provision Mo, Hermes Mini, and DSH Mini; reserve Dell and Book identities.
 3. Verify iPhone login and mobile messaging.
 4. Verify no-mention silence and explicit-mention responses.
 5. Verify Hermes ↔ DSH handoffs and loop termination.
 6. Verify issue → branch → test → commit → PR → Matrix link.
-7. Add Dell, Book, and Grok connectors using the same repository and protocol.
+7. Add Dell and Book connectors using the same repository and protocol. Grok is already deployed through its separate cloud adapter.
