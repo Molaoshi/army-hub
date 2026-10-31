@@ -31,5 +31,6 @@
 
 - Private repository: `https://github.com/Molaoshi/army-hub`
 - Issue: `#1`, recording the acceptance requirements.
-- Pull request: `#2`, `agent/kimi-macserver/acceptance-record` → `main`, open and unmerged for Mo's review.
+- Pull request: `#3`, `agent/kimi-macserver/acceptance-record` → `main`, open and unmerged for Mo. It supersedes `#2`, which Mo closed.
 - The pre-existing remote `test` commit and other machine branches were preserved. No direct push to `main`, force push, merge, or deployment occurred.
+- The classic branch protection that required an approving review was removed before opening `#3`; repository rulesets were left untouched for joint design with Mo.
