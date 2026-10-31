@@ -58,23 +58,34 @@ This uses real model turns and posts test messages in `Army Lab`. It checks unme
 
 ## Grok connector
 
-Read `docs/grok-connector.md` before changing its protocol or exposure. Start or stop only Grok and its MCP quick tunnel with:
+Read `docs/grok-connector.md` before changing its protocol or exposure. The default native connector runs on Grok Bot's computer and uses one persistent Bot conversation. The legacy Mac webhook connector is stopped; never run both adapters.
+
+The Mac-side Matrix quick tunnel is already running. To recreate it and render the ignored remote configuration:
 
 ```sh
-sh scripts/install_grok.sh
-sh scripts/stop_grok.sh
+sh scripts/start_grok_gateway_matrix_tunnel.sh
+.venv-service/bin/python scripts/configure_grok_gateway.py
 ```
 
-Its live acceptance command is:
+This quick tunnel exposes the bearer-authenticated Matrix Client API on loopback port `8010`, not a narrow reply tool. Its URL and the remote Matrix token are sensitive. A recreated hostname requires secure configuration transfer and a remote connector restart.
+
+On Grok Bot's computer, from `/home/box/army-hub`:
+
+```sh
+sh scripts/start_grok_gateway.sh
+sh scripts/stop_grok_gateway.sh
+```
+
+Run live Matrix acceptance from the Mac:
 
 ```sh
 NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
-  .venv-service/bin/python scripts/verify_grok.py
+  .venv-service/bin/python scripts/verify_grok_gateway.py
 ```
 
-This invokes real Grok routine runs and posts in `Army Lab`. It verifies unmentioned silence, a real threaded MCP reply, single-use callback rejection, a Hermes → Grok → Hermes handoff, and the six-turn stop. Results are `.runtime/grok-verification-results.json`; logs are `.runtime/grok.log` and `.runtime/grok-tunnel.log`.
+This posts in `Army Lab`, checks unmentioned silence, and proves exact two-turn memory with a fresh marker. Results are `.runtime/grok-gateway-verification-results.json`. Use `scripts/corroborate_grok_gateway.py` remotely to match a completed pair to the fixed Bot's native transcript by exact nonces without printing transcript bodies.
 
-The quick tunnel exposes only the high-entropy MCP path on loopback port `3105`, not Matrix or Element. Recreating the tunnel changes its public hostname, so the Grok custom connector URL must then be updated. Automatic login startup and a stable named tunnel remain deferred.
+The remote connector and Mac quick tunnel are unsupervised. Restart them after process exit or host replacement. For rollback, stop the native connector remotely and run `sh scripts/install_grok.sh` on the Mac; `sh scripts/stop_grok.sh` stops the legacy adapter and its MCP tunnel.
 
 ## Security notes
 

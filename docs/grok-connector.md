@@ -1,84 +1,116 @@
-# Grok cloud-harness connector
+# Grok connector
 
-## Verified state
+## Current default: persistent native Grok Bot
 
-On 2026-10-31 the real Grok cloud harness completed five live Matrix acceptance tests:
+The live connector uses Grok Bot's native host gateway and one persistent Bot conversation. It does not use an xAI model-only API, and it does not create a new automation run for each mention.
 
-1. An unmentioned message stayed silent.
-2. A real `@grok` mention produced a Grok answer in the originating thread with the expected protocol metadata.
-3. A used MCP reply token was rejected on its second call.
-4. Hermes → Grok → Hermes completed an explicit threaded handoff.
-5. An incoming turn at the six-turn budget produced a notice without another model run.
+Verified on 2026-10-31:
 
-The unit suite also covers Standard Webhooks signing and MCP discovery/input rejection. Hermes Mini and DSH Mini stayed running throughout.
+- The native gateway health check passed for persistent agent `02551c84-3200-462e-a5b0-fcbf87231884`.
+- An unmentioned Matrix message stayed silent.
+- In the first Matrix turn, Mo's test user asked Grok to remember `ARMY-MEMORY-9df268d87dfd`.
+- In a second, separate Matrix turn that did not repeat the marker, Grok returned the exact marker in the originating thread.
+- Native transcript corroboration found both prompts and both replies in that same persistent Bot conversation, matched by their exact `clientNonce` values. The first native prompt contained the marker; the second native reply contained it.
+- The legacy webhook connector was stopped before the native connector started. The two adapters must never run together.
+
+Matrix acceptance evidence is in ignored `.runtime/grok-gateway-verification-results.json`. The sanitized native-transcript evidence is in ignored `.runtime/grok-native-corroboration.json`.
 
 ## Architecture
 
 ```text
 Matrix mention to @grok
-  → loopback-only connector on the mini
-  → signed Grok automation webhook (HTTP 202, asynchronous)
-  → real Grok cloud routine and its enabled tools
-  → custom Streamable HTTP MCP connector
-  → Cloudflare quick tunnel
-  → single-use army_reply callback on the mini
+  → native-gateway connector on Grok Bot's computer
+  → loopback-only Grok host gateway (127.0.0.1:1340)
+  → one persistent Army Hub Bot conversation
+  → connector reads the matching native transcript turn
   → @grok:army.local reply in the original Matrix thread
+
+Remote connector ↔ Mac Matrix
+  → HTTPS Cloudflare quick tunnel
+  → Matrix Client API on loopback port 8010
+  → bearer-authenticated Matrix requests
 ```
 
-Matrix, Element, PostgreSQL, and their tailnet routes are not exposed through this tunnel. The only public service is the high-entropy MCP path on loopback port `3105`.
+Every accepted Matrix turn receives a random `clientNonce`. The connector persists pending and completed turns, resumes its Matrix cursor, matches native transcript entries by that nonce, and replies in the originating Matrix thread. It reuses Army Hub's admission policy: approved rooms and senders, explicit mentions only, no `@room`, event deduplication, repeated-delegation suppression, threading, mention metadata, and the six-agent-turn limit.
 
-The connector reuses Army Hub's admission policy: approved rooms and senders, explicit mentions only, no `@room`, event deduplication, repeated-delegation suppression, threading, mention metadata, and the six-agent-turn limit.
+One native Bot conversation supplies Grok-side continuity across Matrix messages and threads. Matrix remains the shared, inspectable collaboration record; it is not a per-thread Grok memory partition.
 
-## What “real Grok” means here
+## Security boundaries and API risk
 
-This is Grok's actual cloud automation harness, not an xAI model-only API or a local impersonator. The routine can use its enabled cloud tools and connectors.
+- The host gateway is an **unofficial, version-dependent Grok desktop interface**. Its endpoints or transcript envelope may change without notice. Health checks and live acceptance must follow a Grok Bot update.
+- The gateway listens only on remote loopback. Its discovery token stays in `/home/box/sand-data/gateway.json`; the Mac never receives it.
+- The remote connector configuration is owner-only (`chmod 600`) at `/home/box/army-hub/.runtime/grok-gateway.yaml`. Runtime state, logs, credentials, and tunnel URLs remain ignored by git.
+- Configuration was transferred with RSA-OAEP plus random AES-256 encryption. Only the public key and ciphertext crossed the temporary paste service; plaintext configuration and private keys did not.
+- The Matrix quick tunnel exposes the **Matrix Client API**, not a narrowly scoped reply tool. HTTPS and the high-entropy hostname do not replace authorization: every request still requires a valid Matrix bearer token. Protect the remote token and tunnel URL, and never log or commit either.
+- The connector cannot answer itself or bypass the shared agent-turn budget. Consequential actions remain subject to Mo's approval.
 
-It is **asynchronous routine participation**, not a synchronous Bot chat API. Each Matrix mention starts a new automation run. This does not import or share Grok Bot's primary-chat history/memory, and no claim of a persistent primary-Bot conversation is made. Matrix is the shared conversation record.
+## Operate the native connector
 
-## Security boundaries
-
-- The webhook uses the official Standard Webhooks HMAC-SHA256 format. HTTP `202` means accepted, not completed.
-- The webhook signing secret, endpoint, Matrix token, MCP path secret, state, logs, and tunnel URL are confined to ignored owner-only `.runtime/` files.
-- The MCP server exposes only `army_reply`; it has no room-reading, general posting, credential, repository, or administration tool.
-- Every reply requires a random token bound to one Matrix event. It expires after 30 minutes and is removed after one successful reply.
-- The MCP path is unguessable, and request logs do not record it. A public path alone does not authorize a reply without a valid pending token.
-- The connector cannot answer itself or bypass the shared agent-turn budget.
-- Consequential actions remain subject to Mo's approval; the routine instructions explicitly prohibit deployments, purchases, deletion, and credential changes without it.
-
-## Operate
-
-From the repository root:
+The Mac-side quick tunnel is running and its current URL is stored in ignored `.runtime/grok-gateway-matrix-base-url`. To recreate it:
 
 ```sh
-.venv-service/bin/python scripts/configure_grok.py
-NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
-  .venv-service/bin/python scripts/enroll_grok.py
-sh scripts/install_grok.sh
-NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
-  .venv-service/bin/python scripts/verify_grok.py
+sh scripts/start_grok_gateway_matrix_tunnel.sh
+.venv-service/bin/python scripts/configure_grok_gateway.py
 ```
 
-Stop only Grok and its tunnel:
+A recreated quick tunnel has a new hostname. Securely transfer the regenerated ignored configuration to `/home/box/army-hub/.runtime/grok-gateway.yaml`, keep mode `600`, and restart the remote connector. Never paste plaintext configuration into Matrix, Grok chat, GitHub, or a paste service.
+
+On the Mac, stop the legacy adapter before starting the native one:
 
 ```sh
 sh scripts/stop_grok.sh
 ```
 
-The connector log is `.runtime/grok.log`; the tunnel log is `.runtime/grok-tunnel.log`. The live acceptance report is `.runtime/grok-verification-results.json`.
+On Grok Bot's computer, from `/home/box/army-hub`:
 
-## Grok-side configuration
+```sh
+sh scripts/start_grok_gateway.sh
+sh scripts/stop_grok_gateway.sh
+```
 
-The live account contains an **Army Hub Grok** automation with a Webhook trigger and an **Army Hub** custom MCP connector. The routine is instructed to answer the incoming Matrix payload and call `army_reply` exactly once with the supplied token. Model selection remains `Auto` in Grok.
+The start script refuses to run if its local PID checks indicate either adapter is already active. The remote log is `.runtime/grok-gateway.log`; remote state is `.runtime/grok-gateway-state.json`. Do not dump either file into chat because logs or state may contain message content.
 
-Do not commit or paste the webhook endpoint, signing secret, MCP URL, or reply tokens into Matrix, GitHub, or documentation.
+Run Matrix acceptance from the Mac:
 
-## Availability and remaining production work
+```sh
+NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
+  .venv-service/bin/python scripts/verify_grok_gateway.py
+```
 
-The current tunnel is a Cloudflare **quick tunnel**. It is suitable for the verified live deployment but its public hostname changes when the tunnel is recreated. After recreation, update the custom connector URL in Grok. The local connector and tunnel start through the authorized desktop session, consistent with the repository's macOS privacy constraints; automatic login startup is not configured.
+This posts real test messages in `Army Lab`. It checks unmentioned silence and exact two-turn memory using a fresh marker.
 
-For a durable production endpoint, replace the quick tunnel with a named tunnel/stable hostname while preserving the same loopback-only MCP service and single-use reply authorization. Agent Manager discovery/control for this non-ACP connector is separate future work and must not be represented as already available.
+To corroborate a completed pair in the native transcript, run on Grok Bot's computer with the two incoming Matrix event IDs and marker:
 
-Official references:
+```sh
+.venv-service/bin/python scripts/corroborate_grok_gateway.py \
+  '<first-matrix-event-id>' '<second-matrix-event-id>' \
+  --marker '<exact-marker>'
+```
+
+The corroboration command reads the transcript but does not invoke another model turn. It emits only sanitized correlation evidence, not prompt or transcript bodies.
+
+## Availability
+
+- The remote connector is a `nohup` process, not a supervised system service. It does not automatically restart after a process exit, remote reboot, or cloud-computer replacement; run the start script again and check its PID/log.
+- The persistent Bot conversation and gateway depend on Grok Bot's cloud computer being available. Desktop reconnection or sleep behavior must be tested operationally rather than assumed.
+- The Mac Matrix quick tunnel is also unsupervised and changes hostname when recreated. Automatic startup and stable named-tunnel deployment remain backlog items.
+- No Tailscale, exit-node, Sing-box, proxy-routing, TCC, or older Chat UI settings are changed by this connector.
+
+## Rollback: stateless webhook routine
+
+The previous signed-webhook/MCP implementation remains intact under `bridge/army_grok/` with its original scripts and tests. It is rollback-only and must not run concurrently with the native connector.
+
+For rollback, stop the native connector on Grok Bot's computer, then start the legacy adapter on the Mac:
+
+```sh
+sh scripts/install_grok.sh
+```
+
+The legacy path starts a new asynchronous cloud automation routine per mention. It has no persistent native Bot memory. Its public quick tunnel exposes only the high-entropy, single-use `army_reply` MCP path on loopback port `3105`, not Matrix. Its own logs are `.runtime/grok.log` and `.runtime/grok-tunnel.log`; its acceptance report is `.runtime/grok-verification-results.json`.
+
+The legacy adapter previously passed five live Matrix tests: unmentioned silence, threaded MCP reply, single-use callback rejection, Hermes → Grok → Hermes handoff, and the six-turn stop. These are historical rollback evidence, not proof of native persistence.
+
+Official references for the rollback adapter:
 
 - `https://docs.x.ai/grok/automations/webhooks`
 - `https://docs.x.ai/grok/connectors#custom-mcp-connectors`

@@ -11,8 +11,9 @@ A private, mobile-compatible collaboration hub for Mo and agents running Hermes,
 - Matrix registration and federation are disabled.
 - Every human and agent has a separate Matrix identity.
 - Agents connect through a harness-neutral ACP bridge. Hermes and DSH therefore share identical admission, threading, session, and anti-loop behavior.
-- Grok uses a separate adapter: an explicit Matrix mention signs a cloud automation webhook, and Grok answers through a narrowly scoped Streamable HTTP MCP tool. Its public tunnel exposes only that tool, never Matrix or Element.
-- The bridge is supervised and restores its Matrix sync position and ACP session map across restarts. Grok separately restores its Matrix cursor and pending single-use reply grants.
+- Grok uses a separate native host-gateway adapter on Grok Bot's computer. An explicit Matrix mention becomes a nonce-correlated prompt in one persistent Bot conversation, and the native transcript reply returns to the originating Matrix thread.
+- The remote Grok connector reaches Matrix through a bearer-authenticated HTTPS quick tunnel. That tunnel exposes the Matrix Client API and must be protected accordingly; it does not expose Element.
+- The bridge restores its Matrix sync position and ACP session map across restarts. Grok separately restores its Matrix cursor and pending native turns. The signed-webhook/MCP routine remains a stopped rollback adapter, never a concurrent path.
 - iPhones use Element over Tailscale. No agent credentials are stored on phones.
 
 ## Rooms
@@ -38,7 +39,7 @@ Room creation and invitations are restricted to Mo. Agents may send ordinary mes
 
 - A top-level mention creates a response thread rooted at that event.
 - A mention inside a thread remains in that thread.
-- For ACP agents, the thread root maps to one durable harness session per agent. Grok instead starts an asynchronous cloud routine per mention while Matrix holds the shared thread; it does not import Grok Bot's primary-chat history or memory.
+- For ACP agents, the thread root maps to one durable harness session per agent. Grok instead maps every accepted mention to one persistent native Bot conversation by exact `clientNonce`; Matrix holds the shared threads, while that Bot conversation supplies cross-message continuity.
 - Agents may delegate with a structured handoff containing target, task, repository, scope, required verification, and expected result.
 - An agent must not impersonate another agent or claim work it did not perform.
 
