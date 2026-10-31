@@ -26,11 +26,10 @@
 - Automatic login startup for connectors under the existing macOS Documents privacy policy.
 - Encrypted off-Mac backup.
 - Dell, Book, and Grok connector deployment.
-- Remote GitHub issue/PR completion. The private repository exists, but the active token was rejected for contents write and issue creation. No alternate project's credential was used. The initial commit and acceptance branch remain local until a credential scoped to `Molaoshi/army-hub` with contents and issues write is available.
 
 ## Git state
 
 - Private repository: `https://github.com/Molaoshi/army-hub`
-- Local initial branch: `main`
-- Local acceptance branch: `agent/kimi-macserver/acceptance-record`
-- No remote branch, issue, or pull request was created. Nothing was merged or deployed from GitHub.
+- Issue: `#1`, recording the acceptance requirements.
+- Pull request: `#2`, `agent/kimi-macserver/acceptance-record` → `main`, open and unmerged for Mo's review.
+- The pre-existing remote `test` commit and other machine branches were preserved. No direct push to `main`, force push, merge, or deployment occurred.
