@@ -38,7 +38,7 @@ config = {
         "allow_agent_senders": True,
         "max_message_chars": 40000,
     },
-    "state_path": str(RUNTIME / "grok-gateway-state.json"),
+    "state_path": "/home/box/army-hub/.runtime/grok-gateway-state.json",
 }
 path = RUNTIME / "grok-gateway.yaml"
 path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
