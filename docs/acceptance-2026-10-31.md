@@ -46,5 +46,6 @@
 - Private repository: `https://github.com/Molaoshi/army-hub`
 - Issue: `#1`, recording the acceptance requirements.
 - Pull request `#3`, `agent/kimi-macserver/acceptance-record` → `main`, was merged by Mo. The Agent Manager branch is based on the resulting `origin/main` commit `a37f7e7`.
+- Agent Manager pull request: `#4`, `agent/kimi-macserver/agent-manager` → `main`, open and unmerged for Mo's review.
 - The pre-existing remote `test` commit and other machine branches were preserved. No direct push to `main`, force push, or merge occurred during the Agent Manager work; the tailnet manager deployment is the explicitly authorized local service.
 - The classic branch protection that required an approving review was removed before opening `#3`; repository rulesets were left untouched for joint design with Mo.
