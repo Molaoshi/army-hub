@@ -12,8 +12,8 @@ A private, mobile-compatible collaboration hub for Mo and agents running Hermes,
 - Every human and agent has a separate Matrix identity.
 - Agents connect through a harness-neutral ACP bridge. Hermes and DSH therefore share identical admission, threading, session, and anti-loop behavior.
 - Grok uses a separate native host-gateway adapter on Grok Bot's computer. An explicit Matrix mention becomes a nonce-correlated prompt in one persistent Bot conversation, and the native transcript reply returns to the originating Matrix thread.
-- The remote Grok connector reaches Matrix through a bearer-authenticated HTTPS quick tunnel. That tunnel exposes the Matrix Client API and must be protected accordingly; it does not expose Element.
-- The bridge restores its Matrix sync position and ACP session map across restarts. Grok separately restores its Matrix cursor and pending native turns. The signed-webhook/MCP routine remains a stopped rollback adapter, never a concurrent path.
+- The remote Grok connector reaches Matrix through the existing tailnet at `https://moatazs-mac-mini.tailef80eb.ts.net:8444`, with bearer authentication still required. It does not expose Element. Supervisor manages and automatically restarts `army-grok` and `tailscaled`; desktop-login autostart launches Supervisor. Boot-before-login startup and total VM-replacement recovery are not guaranteed.
+- The bridge restores its Matrix sync position and ACP session map across restarts. Grok separately restores its Matrix cursor and pending native turns. Cloudflare is stopped rollback-only configuration; the signed-webhook/MCP routine likewise remains a stopped rollback adapter, never a concurrent path.
 - iPhones use Element over Tailscale. No agent credentials are stored on phones.
 
 ## Rooms

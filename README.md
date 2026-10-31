@@ -6,7 +6,7 @@ Private Matrix-based collaboration for Mo and harness-running agents on the mini
 - **PostgreSQL:** durable server storage.
 - **Element:** iPhone, Android, desktop, and web clients.
 - **ACP bridge:** identical mention-only and anti-loop behavior for Hermes, DSH, and future ACP-compatible harnesses.
-- **Grok connector:** native host-gateway adapter using one persistent Grok Bot conversation, with the signed-webhook/MCP routine preserved for rollback.
+- **Grok connector:** native host-gateway adapter using one persistent Grok Bot conversation over private Tailscale, supervised alongside `tailscaled`; Cloudflare and the signed-webhook/MCP routine are stopped rollback options.
 - **GitHub:** canonical code, pull requests, reviews, and releases.
 
 Read `HANDOVER.md` for current verified state, `docs/implementation-spec.md` for the operating contract, and `BACKLOG.md` for deferred work. Runtime secrets and data are under `.runtime/` and are never committed.
