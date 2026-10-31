@@ -44,14 +44,16 @@ def main() -> None:
         if native is None:
             raise SystemExit(f"Native transcript does not contain clientNonce {nonce}")
         prompt, replies = native
-        prompt_text = str(prompt.get("message", {}).get("content", ""))
+        # Native prompt text has appeared under different envelope shapes across
+        # gateway versions; inspect the selected prompt only, never the transcript.
+        prompt_payload = json.dumps(prompt, ensure_ascii=False)
         response_text = reply_text(replies)
         turns.append({
             "matrix_event_id": event_id,
             "client_nonce": nonce,
             "prompt_observed": True,
             "reply_observed": bool(replies),
-            "marker_in_prompt": args.marker in prompt_text,
+            "marker_in_prompt": args.marker in prompt_payload,
             "marker_in_reply": args.marker in response_text,
             "grok_entry_ids": [str(item.get("id", "")) for item in replies],
             "request_id": prompt.get("requestId"),
