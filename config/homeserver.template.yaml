@@ -1,0 +1,37 @@
+server_name: "army.local"
+public_baseurl: "https://moatazs-mac-mini.tailef80eb.ts.net:8444/"
+pid_file: /data/homeserver.pid
+listeners:
+  - port: 8008
+    bind_addresses: ['0.0.0.0']
+    type: http
+    tls: false
+    x_forwarded: true
+    resources:
+      - names: [client]
+        compress: false
+
+database:
+  name: psycopg2
+  args:
+    user: synapse
+    password: "__POSTGRES_PASSWORD__"
+    database: synapse
+    host: postgres
+    port: 5432
+
+log_config: "/data/army.local.log.config"
+media_store_path: /data/media_store
+signing_key_path: "/data/army.local.signing.key"
+registration_shared_secret: "__REGISTRATION_SHARED_SECRET__"
+macaroon_secret_key: "__MACAROON_SECRET_KEY__"
+form_secret: "__FORM_SECRET__"
+
+report_stats: false
+enable_registration: false
+allow_guest_access: false
+serve_server_wellknown: false
+federation_domain_whitelist: []
+max_upload_size: 50M
+password_config:
+  enabled: true
