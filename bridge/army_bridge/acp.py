@@ -58,18 +58,39 @@ class AcpClient:
 
     async def close(self) -> None:
         process = self.process
-        if process and process.returncode is None:
-            if process.stdin:
-                process.stdin.close()
-            try:
-                await asyncio.wait_for(process.wait(), timeout=5)
-            except asyncio.TimeoutError:
-                process.terminate()
-                await asyncio.wait_for(process.wait(), timeout=5)
-        for task in (self.reader_task, self.stderr_task):
-            if task:
+        for future in self.pending.values():
+            if not future.done():
+                future.cancel()
+        self.pending.clear()
+        try:
+            if process and process.returncode is None:
+                if process.stdin:
+                    process.stdin.close()
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=1)
+                except asyncio.TimeoutError:
+                    try:
+                        process.terminate()
+                    except ProcessLookupError:
+                        pass
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=2)
+                    except asyncio.TimeoutError:
+                        try:
+                            process.kill()
+                        except ProcessLookupError:
+                            pass
+                        await asyncio.wait_for(process.wait(), timeout=2)
+        finally:
+            tasks = [task for task in (self.reader_task, self.stderr_task) if task]
+            for task in tasks:
                 task.cancel()
-        self.process = None
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            self.reader_task = None
+            self.stderr_task = None
+            if not process or process.returncode is not None:
+                self.process = None
 
     async def new_session(self) -> str:
         result = await self.request("session/new", {
@@ -111,6 +132,9 @@ class AcpClient:
         except asyncio.TimeoutError as error:
             self.pending.pop(request_id, None)
             raise AcpError(f"{method} timed out after {timeout or self.timeout} seconds") from error
+        except asyncio.CancelledError:
+            self.pending.pop(request_id, None)
+            raise
         if "error" in response:
             detail = response["error"]
             raise AcpError(f"{method}: {detail.get('message', detail)}")

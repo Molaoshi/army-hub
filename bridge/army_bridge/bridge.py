@@ -18,6 +18,11 @@ LOG = logging.getLogger(__name__)
 PROTOCOL_KEY = "com.molaoshi.army_hub"
 
 
+def _bounded_turn_delay(last_turn_at: float, interval: float, now: float) -> float:
+    elapsed = now - float(last_turn_at)
+    return min(interval, max(0.0, interval - elapsed))
+
+
 class BridgeState:
     def __init__(self, path: Path):
         self.path = path
@@ -53,6 +58,7 @@ class ArmyBridge:
         self.client.access_token = settings.matrix.access_token
         self.sessions = SessionManager(settings.agent, settings.policy.prompt_timeout_seconds)
         self.stop_event = asyncio.Event()
+        self._run_task: asyncio.Task | None = None
 
     @property
     def agent_id(self) -> str:
@@ -63,30 +69,34 @@ class ArmyBridge:
         return self.settings.matrix.user_id
 
     async def run(self) -> None:
+        self._run_task = asyncio.current_task()
         first_sync = not self.state.data.get("next_batch")
         backoff = 1
-        while not self.stop_event.is_set():
-            try:
-                response = await self.client.sync(
-                    timeout=30_000,
-                    since=self.state.data.get("next_batch"),
-                    full_state=False,
-                )
-                if isinstance(response, SyncError):
-                    raise RuntimeError(f"Matrix sync failed: {response}")
-                if not first_sync:
-                    await self._process_sync(response)
-                self.state.data["next_batch"] = response.next_batch
-                self.state.save()
-                first_sync = False
-                backoff = 1
-            except asyncio.CancelledError:
-                break
-            except Exception:
-                LOG.exception("Matrix loop failed; retrying in %s seconds", backoff)
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, 60)
-        await self.close()
+        try:
+            while not self.stop_event.is_set():
+                try:
+                    response = await self.client.sync(
+                        timeout=30_000,
+                        since=self.state.data.get("next_batch"),
+                        full_state=False,
+                    )
+                    if isinstance(response, SyncError):
+                        raise RuntimeError(f"Matrix sync failed: {response}")
+                    if not first_sync:
+                        await self._process_sync(response)
+                    self.state.data["next_batch"] = response.next_batch
+                    self.state.save()
+                    first_sync = False
+                    backoff = 1
+                except asyncio.CancelledError:
+                    break
+                except Exception:
+                    LOG.exception("Matrix loop failed; retrying in %s seconds", backoff)
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, 60)
+        finally:
+            await self.close()
+            self._run_task = None
 
     async def close(self) -> None:
         await self.sessions.client.close()
@@ -94,6 +104,8 @@ class ArmyBridge:
 
     def stop(self) -> None:
         self.stop_event.set()
+        if self._run_task and not self._run_task.done():
+            self._run_task.cancel()
 
     async def _process_sync(self, response: Any) -> None:
         for room_id, room in response.rooms.join.items():
@@ -146,9 +158,13 @@ class ArmyBridge:
             )
             return
 
-        elapsed = time.monotonic() - float(self.state.data.get("last_turn_at", 0))
-        if elapsed < self.settings.policy.min_turn_interval_seconds:
-            await asyncio.sleep(self.settings.policy.min_turn_interval_seconds - elapsed)
+        delay = _bounded_turn_delay(
+            self.state.data.get("last_turn_at", 0),
+            self.settings.policy.min_turn_interval_seconds,
+            time.time(),
+        )
+        if delay:
+            await asyncio.sleep(delay)
 
         prompt = self._prompt(event.sender, room_id, root, body)
         try:
@@ -156,7 +172,7 @@ class ArmyBridge:
             saved_session = self.state.data["sessions"].get(session_key)
             session_id, answer = await self.sessions.prompt(session_key, prompt, saved_session)
             self.state.data["sessions"][session_key] = session_id
-            self.state.data["last_turn_at"] = time.monotonic()
+            self.state.data["last_turn_at"] = time.time()
             self.state.save()
             await self._send(room_id, root, event_id, answer, incoming_turn + 1, msgtype="m.text")
         except Exception as error:
