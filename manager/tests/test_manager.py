@@ -16,7 +16,7 @@ from army_manager.store import ManagerStore
 
 
 def payload(**changes):
-    value = {"display_name": "Researcher", "machine": "mini", "harness": "hermes",
+    value = {"display_name": "Researcher", "machine": "mini", "harness": "hermes", "provider": "deepseek",
              "model": "deepseek-v4-pro", "effort": None, "project": "army-hub", "rooms": ["!lab:army.local"]}
     value.update(changes)
     return value
@@ -29,7 +29,7 @@ def provisioner(root: Path):
     matrix.credentials.return_value = json.loads((root / ".runtime" / "credentials.json").read_text())
     inventory = Mock()
     inventory.harnesses.side_effect = lambda machine: ([{"id": "hermes"}, {"id": "dsh"}] if machine == "mini" else [])
-    inventory.models.side_effect = lambda machine, harness: ([{"id": "deepseek-v4-pro", "efforts": []}] if harness == "hermes" else [{"id": "default", "efforts": []}])
+    inventory.models.side_effect = lambda machine, harness: ([{"id": "deepseek-v4-pro", "provider": "deepseek", "efforts": []}] if harness == "hermes" else [{"id": "deepseek-flash", "provider": "deepseek-official", "efforts": []}])
     inventory.projects.return_value = [{"id": "army-hub"}]
     return Provisioner(store, matrix, inventory, Mock()), store
 
@@ -45,15 +45,36 @@ def test_store_imports_existing_agents_without_matrix_secrets(root):
 
 def test_dependent_runtime_validation(root):
     manager, _ = provisioner(root)
-    assert manager.validate(payload())["id"] == "researcher"
+    validated = manager.validate(payload())
+    assert validated["id"] == "researcher"
+    assert validated["provider"] == "deepseek"
     with pytest.raises(ValueError, match="harness"):
         manager.validate(payload(machine="dell"))
     with pytest.raises(ValueError, match="model"):
         manager.validate(payload(model="invented-model"))
+    with pytest.raises(ValueError, match="combination"):
+        manager.validate(payload(provider="kimi-coding"))
     with pytest.raises(ValueError, match="effort"):
         manager.validate(payload(effort="ultra"))
     with pytest.raises(ValueError, match="room"):
         manager.validate(payload(rooms=[]))
+
+
+def test_unavailable_and_stale_models_cannot_be_provisioned(root):
+    manager, _ = provisioner(root)
+    manager.inventory.models.side_effect = lambda machine, harness: [{
+        "id": "deepseek-v4-pro", "provider": "deepseek", "efforts": [],
+        "selectable": False, "availability": "unavailable",
+        "availability_reason": "Configured provider endpoint is unreachable.",
+    }]
+    with pytest.raises(ValueError, match="unreachable"):
+        manager.validate(payload())
+    manager.inventory.models.side_effect = lambda machine, harness: [{
+        "id": "deepseek-v4-pro", "provider": "deepseek", "efforts": [],
+        "stale": True, "selectable": False, "availability": "stale",
+    }]
+    with pytest.raises(ValueError, match="revalidation failed"):
+        manager.validate(payload())
 
 
 def test_duplicate_active_identity_rejected(root):
@@ -64,24 +85,50 @@ def test_duplicate_active_identity_rejected(root):
 
 def test_update_preserves_identity(root):
     manager, store = provisioner(root)
-    record = manager.update("hermes-mini", payload(harness="dsh", model="default"))
+    record = manager.update("hermes-mini", payload(harness="dsh", provider="deepseek-official", model="deepseek-flash"))
     assert record["id"] == "hermes-mini"
     assert record["mxid"] == "@hermes-mini:army.local"
     assert record["harness"] == "dsh"
+    assert record["provider"] == "deepseek-official"
 
 
 def test_rendered_config_uses_model_and_registered_workspace(root):
     store = ManagerStore(root)
     connectors = ConnectorManager(root, store)
-    record = {"id": "researcher", "display_name": "Researcher", "harness": "hermes",
+    record = {"id": "researcher", "display_name": "Researcher", "harness": "hermes", "provider": "deepseek",
               "model": "deepseek-flash", "machine": "mini", "project": "army-hub", "rooms": ["!lab:army.local"]}
     matrix_record = {"mxid": "@researcher:army.local", "access_token": "private-matrix-token", "device_id": "device"}
     connectors.render_config(record, matrix_record)
     config = yaml.safe_load((root / ".runtime" / "researcher.yaml").read_text())
+    assert config["agent"]["command"][-1] == "acp"
+    assert config["agent"]["session_config"] == {"model": "deepseek:deepseek-flash"}
     assert config["agent"]["environment"]["HERMES_INFERENCE_MODEL"] == "deepseek-flash"
     assert config["agent"]["cwd"] == str(root)
     assert config["matrix"]["allowed_rooms"] == ["!lab:army.local"]
     assert (root / ".runtime" / "researcher.yaml").stat().st_mode & 0o777 == 0o600
+
+
+def test_dsh_and_opencode_selections_reach_connector_configuration(root, monkeypatch):
+    store = ManagerStore(root)
+    connectors = ConnectorManager(root, store)
+    matrix_record = {"mxid": "@researcher:army.local", "access_token": "private-matrix-token", "device_id": "device"}
+    base = {"id": "researcher", "display_name": "Researcher", "machine": "mini", "project": "army-hub", "rooms": ["!lab:army.local"]}
+    connectors.render_config({**base, "harness": "dsh", "provider": "deepseek-official",
+                              "model": "deepseek-flash", "effort": "high"}, matrix_record)
+    config = yaml.safe_load((root / ".runtime" / "researcher.yaml").read_text())
+    assert config["agent"]["environment"]["DSH_MODEL"] == "deepseek-flash"
+    assert config["agent"]["session_config"] == {"model": "deepseek-official::deepseek-flash", "effort": "high"}
+
+    monkeypatch.setattr("army_manager.connectors.opencode_cli", lambda: Path("/detected/opencode-cli"))
+    monkeypatch.setenv("OLLAMA_API_KEY", "must-not-be-serialized")
+    connectors.render_config({**base, "harness": "opencode", "provider": "opencode",
+                              "model": "opencode/deepseek-v4.1-flash-free", "effort": "high"}, matrix_record)
+    config = yaml.safe_load((root / ".runtime" / "researcher.yaml").read_text())
+    assert config["agent"]["command"] == ["/detected/opencode-cli", "acp"]
+    assert config["agent"]["session_config"] == {"model": "opencode/deepseek-v4.1-flash-free", "effort": "high"}
+    opencode_config = json.loads(config["agent"]["environment"]["OPENCODE_CONFIG_CONTENT"])
+    assert opencode_config["provider"]["ollama-cloud"]["options"]["apiKey"] == "{env:OLLAMA_API_KEY}"
+    assert "must-not-be-serialized" not in (root / ".runtime" / "researcher.yaml").read_text()
 
 
 def test_credentials_are_masked_and_scoped(root, monkeypatch):

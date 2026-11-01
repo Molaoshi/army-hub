@@ -46,7 +46,7 @@ Do not use `tailscale serve reset`; it would remove unrelated services. To remov
 
 ## Backups
 
-The `army-backup` container runs `scripts/backup.sh` every night at 03:17 China Standard Time (`19:17 UTC`). A backup contains a PostgreSQL custom-format dump, restore manifest, Synapse signing material/configuration/media, room map, and provisioning credentials. Files are owner-only and the latest 14 archives are retained.
+The `army-backup` container runs `scripts/backup.sh` every night at 03:17 China Standard Time (`19:17 UTC`). A backup contains a PostgreSQL custom-format dump, restore manifest, Synapse signing material/configuration/media, room map, provisioning credentials, bridge state, and consistent online snapshots of every top-level legacy `.runtime/*-mailbox.sqlite3` and manager-default `.runtime/*-state.mailbox.sqlite3`. Discovery is deduplicated, and a configured runtime with no recognized mailboxes fails loudly instead of producing a successful empty manifest. The mailbox manifest records byte size, SHA-256, and SQLite `integrity_check`; never copy a live mailbox without preserving a consistent WAL state. State directories are enforced to `0700`; main databases and WAL/SHM sidecars are enforced to `0600` on initialization and writes. Files are owner-only and the latest 14 archives are retained.
 
 Run and inspect a backup manually:
 
@@ -56,7 +56,7 @@ docker compose exec backup crontab -l
 ls -lt .runtime/backups
 ```
 
-The 2026-10-31 acceptance run produced an 831-entry restore manifest and restored successfully into an isolated temporary database; all three rooms were present. The temporary database was then removed.
+The 2026-10-31 acceptance run produced an 831-entry restore manifest and restored successfully into an isolated temporary database; all three rooms were present. The temporary database was then removed. On 2026-11-02, backup `army-hub-20261101T162807Z.tar.gz` contained both Hermes and DSH mailbox snapshots, and both passed SQLite integrity and manifest SHA-256 verification.
 
 A copy on the same Mac is not disaster protection. Copy the archive to another machine or object storage and encrypt it before off-Mac transport. Off-Mac backup is not yet configured.
 

@@ -97,7 +97,9 @@ class AcpClient:
             "cwd": self.settings.cwd,
             "mcpServers": [],
         }, timeout=120)
-        return result["sessionId"]
+        session_id = result["sessionId"]
+        await self._apply_session_config(session_id, result.get("configOptions"))
+        return session_id
 
     async def load_session(self, session_id: str) -> str:
         result = await self.request("session/load", {
@@ -105,7 +107,27 @@ class AcpClient:
             "cwd": self.settings.cwd,
             "mcpServers": [],
         }, timeout=120)
-        return result.get("sessionId", session_id)
+        restored_id = result.get("sessionId", session_id)
+        await self._apply_session_config(restored_id, result.get("configOptions"))
+        return restored_id
+
+    async def _apply_session_config(self, session_id: str, options: list[dict[str, Any]] | None) -> None:
+        """Apply only selections explicitly provisioned for an ACP-native harness."""
+        current_options = options
+        # Model first: the harness may replace dependent effort options afterward.
+        desired = sorted(self.settings.session_config.items(), key=lambda item: item[0] != "model")
+        for config_id, value in desired:
+            if current_options is not None:
+                option = next((item for item in current_options if item.get("id") == config_id), None)
+                if not option or value not in {choice.get("value") for choice in option.get("options", [])}:
+                    raise AcpError(f"Harness does not advertise {config_id}={value}")
+            result = await self.request("session/set_config_option", {
+                "sessionId": session_id, "configId": config_id, "value": value,
+            }, timeout=60)
+            current_options = result.get("configOptions", [])
+            selected = next((item for item in current_options if item.get("id") == config_id), None)
+            if not selected or selected.get("currentValue") != value:
+                raise AcpError(f"Harness did not apply {config_id}={value}")
 
     async def prompt(self, session_id: str, text: str) -> str:
         self.prompt_text[session_id].clear()

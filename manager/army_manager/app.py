@@ -108,11 +108,14 @@ def health() -> dict[str, Any]:
 @app.get("/api/inventory")
 def get_inventory(session: dict[str, Any] = Depends(authorized)) -> dict[str, Any]:
     machines = inventory.machines()
+    harnesses = {item["id"]: inventory.harnesses(item["id"]) for item in machines}
+    models = {item["id"]: {harness["id"]: inventory.models(item["id"], harness["id"])
+                           for harness in harnesses[item["id"]]} for item in machines}
     return {
         "machines": machines,
-        "harnesses": {item["id"]: inventory.harnesses(item["id"]) for item in machines},
-        "models": {item["id"]: {harness["id"]: inventory.models(item["id"], harness["id"])
-                                for harness in inventory.harnesses(item["id"])} for item in machines},
+        "harnesses": harnesses,
+        "models": models,
+        "discovery": inventory.discovery_status(),
         "projects": {item["id"]: inventory.projects(item["id"]) for item in machines},
         "rooms": matrix.rooms(),
         "providers": PROVIDERS,
@@ -282,4 +285,4 @@ def static_files(path: str = "") -> FileResponse:
     candidate = (STATIC / path).resolve()
     if STATIC not in candidate.parents or not candidate.is_file():
         raise HTTPException(404, "Not found")
-    return FileResponse(candidate)
+    return FileResponse(candidate, headers={"Cache-Control": "no-cache, must-revalidate"})

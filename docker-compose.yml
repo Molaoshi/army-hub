@@ -50,7 +50,9 @@ services:
       - "127.0.0.1:3103:80"
 
   backup:
-    image: postgres:16-alpine
+    build:
+      context: .
+      dockerfile: deploy/backup.Dockerfile
     container_name: army-backup
     restart: unless-stopped
     depends_on:

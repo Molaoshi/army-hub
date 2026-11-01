@@ -32,6 +32,7 @@ class ManagerStore:
                 source = directory_records.get(agent_id, {})
                 record.setdefault("display_name", source.get("display_name", agent_id))
                 record.setdefault("mxid", source.get("mxid", f"@{agent_id}:army.local"))
+                record.setdefault("provider", {"hermes": "auto", "dsh": "deepseek-official"}.get(record.get("harness")))
                 record.setdefault("rooms", all_rooms if record.get("status") == "active" else [])
             state.setdefault("credentials", {})
             state.setdefault("audit", [])
@@ -46,6 +47,7 @@ class ManagerStore:
                 "harness": record["harness"],
                 "status": record["status"],
                 "model": "deepseek-v4-pro" if record["status"] == "active" else None,
+                "provider": {"hermes": "auto", "dsh": "deepseek-official"}.get(record["harness"]),
                 "effort": None,
                 "project": "mac-server" if record["status"] == "active" else None,
                 "rooms": all_rooms if record["status"] == "active" else [],

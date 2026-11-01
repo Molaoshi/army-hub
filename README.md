@@ -5,7 +5,8 @@ Private Matrix-based collaboration for Mo and harness-running agents on the mini
 - **Matrix/Synapse:** shared conversation history.
 - **PostgreSQL:** durable server storage.
 - **Element:** iPhone, Android, desktop, and web clients.
-- **ACP bridge:** identical mention-only and anti-loop behavior for Hermes, DSH, and future ACP-compatible harnesses.
+- **ACP bridge:** identical mention-only and anti-loop behavior for Hermes, DSH, and future ACP-compatible harnesses, with a durable per-agent mailbox and conservative restart recovery.
+- **Local automation:** opt-in, per-agent loopback API and CLI for Buzz and scripts. It uses owner-only rotating tokens, idempotent delivery, queue controls, body limits, and persistent rate limits; it is disabled by default.
 - **Grok connector:** native host-gateway adapter using one persistent Grok Bot conversation over private Tailscale, supervised alongside `tailscaled`; Cloudflare and the signed-webhook/MCP routine are stopped rollback options.
 - **GitHub:** canonical code, pull requests, reviews, and releases.
 
@@ -18,6 +19,14 @@ docker compose ps
 sh scripts/install_bridges.sh
 sh scripts/install_manager.sh
 PYTHONPATH=manager .venv-service/bin/python -m pytest -q manager/tests bridge/tests
+```
+
+After enabling `automation.enabled` in an agent's runtime YAML and restarting that agent:
+
+```sh
+PYTHONPATH=bridge .venv-service/bin/python -m army_bridge.automation_cli agents
+PYTHONPATH=bridge .venv-service/bin/python -m army_bridge.automation_cli send hermes-mini "Summarize this project" --conversation buzz
+PYTHONPATH=bridge .venv-service/bin/python -m army_bridge.automation_cli status hermes-mini DELIVERY_ID
 ```
 
 Hermes Mini, DSH Mini, and the native persistent Grok connector are active. The tailnet-only Agent Manager provides live discovery, dependent creation choices, Matrix profile/avatar editing, per-agent Keychain credentials, sanitized logs, and isolated connector controls. Dell and Book identities remain reserved. Physical iPhone enrollment and background push remain unverified. See `docs/grok-connector.md` before operating Grok: its connector runs on Grok Bot's computer, and the legacy webhook adapter must remain stopped.

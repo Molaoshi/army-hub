@@ -1,49 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from pathlib import Path
 import re
-import time
 from typing import Any
 
 from nio import AsyncClient, RoomMessageText, SyncError
 
 from .acp import SessionManager
+from .automation import AutomationServer
+from .bridge_state import BridgeState
 from .config import Settings
+from .mailbox import DurableMailbox
 from .policy import admission_denial, delegation_fingerprint, thread_root
+from .worker import DeliveryWorker, bounded_turn_delay as _bounded_turn_delay
 
 LOG = logging.getLogger(__name__)
 PROTOCOL_KEY = "com.molaoshi.army_hub"
-
-
-def _bounded_turn_delay(last_turn_at: float, interval: float, now: float) -> float:
-    elapsed = now - float(last_turn_at)
-    return min(interval, max(0.0, interval - elapsed))
-
-
-class BridgeState:
-    def __init__(self, path: Path):
-        self.path = path
-        self.data: dict[str, Any] = {
-            "next_batch": None,
-            "processed_event_ids": [],
-            "sessions": {},
-            "delegation_fingerprints": [],
-            "last_turn_at": 0.0,
-        }
-        if path.exists():
-            self.data.update(json.loads(path.read_text(encoding="utf-8")))
-
-    def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.data["processed_event_ids"] = self.data["processed_event_ids"][-5000:]
-        self.data["delegation_fingerprints"] = self.data["delegation_fingerprints"][-1000:]
-        temporary = self.path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(self.data, indent=2) + "\n", encoding="utf-8")
-        temporary.replace(self.path)
-        self.path.chmod(0o600)
 
 
 class ArmyBridge:
@@ -57,8 +30,23 @@ class ArmyBridge:
         )
         self.client.access_token = settings.matrix.access_token
         self.sessions = SessionManager(settings.agent, settings.policy.prompt_timeout_seconds)
+        self.mailbox = DurableMailbox(settings.mailbox_path or settings.state_path.with_suffix(".mailbox.sqlite3"))
+        self.worker = DeliveryWorker(
+            mailbox=self.mailbox,
+            sessions=self.sessions,
+            state=self.state,
+            policy=settings.policy,
+            notifier=self._notify_delivery,
+        )
+        self.automation = AutomationServer(
+            settings=settings.automation,
+            agent=settings.agent,
+            mailbox=self.mailbox,
+            on_enqueue=self.worker.wake,
+        )
         self.stop_event = asyncio.Event()
         self._run_task: asyncio.Task | None = None
+        self._closed = False
 
     @property
     def agent_id(self) -> str:
@@ -73,6 +61,8 @@ class ArmyBridge:
         first_sync = not self.state.data.get("next_batch")
         backoff = 1
         try:
+            await self.worker.start()
+            await self.automation.start()
             while not self.stop_event.is_set():
                 try:
                     response = await self.client.sync(
@@ -99,8 +89,14 @@ class ArmyBridge:
             self._run_task = None
 
     async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        await self.automation.stop()
+        await self.worker.stop()
         await self.sessions.client.close()
         await self.client.close()
+        self.mailbox.close()
 
     def stop(self) -> None:
         self.stop_event.set()
@@ -158,26 +154,21 @@ class ArmyBridge:
             )
             return
 
-        delay = _bounded_turn_delay(
-            self.state.data.get("last_turn_at", 0),
-            self.settings.policy.min_turn_interval_seconds,
-            time.time(),
-        )
-        if delay:
-            await asyncio.sleep(delay)
-
         prompt = self._prompt(event.sender, room_id, root, body)
-        try:
-            session_key = root
-            saved_session = self.state.data["sessions"].get(session_key)
-            session_id, answer = await self.sessions.prompt(session_key, prompt, saved_session)
-            self.state.data["sessions"][session_key] = session_id
-            self.state.data["last_turn_at"] = time.time()
-            self.state.save()
-            await self._send(room_id, root, event_id, answer, incoming_turn + 1, msgtype="m.text")
-        except Exception as error:
-            LOG.exception("Agent turn failed for %s", event_id)
-            await self._notice(room_id, root, event_id, f"@mo {self.settings.agent.display_name} could not complete the turn: {self._safe_error(error)}")
+        delivery, created = self.mailbox.enqueue(
+            source="matrix",
+            idempotency_key=event_id,
+            session_key=root,
+            prompt=prompt,
+            room_id=room_id,
+            thread_root=root,
+            reply_to=event_id,
+            agent_turn=incoming_turn + 1,
+        )
+        self.state.save()
+        if created:
+            LOG.info("Queued Matrix delivery %s for %s", delivery["id"], event_id)
+            self.worker.wake()
 
     def _prompt(self, sender: str, room_id: str, root: str, body: str) -> str:
         return f"""You are {self.settings.agent.display_name} ({self.user_id}) in Mo's private Army Hub.
@@ -200,7 +191,40 @@ Message:
 {body}
 """
 
-    async def _send(self, room_id: str, root: str, reply_to: str, body: str, agent_turn: int, msgtype: str) -> None:
+    async def _notify_delivery(self, delivery: dict[str, Any]) -> None:
+        status = delivery["status"]
+        if status == "completed":
+            body = delivery["response"] or ""
+            msgtype = "m.text"
+            agent_turn = delivery["agent_turn"]
+        elif status == "failed":
+            body = f"@mo {self.settings.agent.display_name} could not complete the turn: {delivery['error']}"
+            msgtype = "m.notice"
+            agent_turn = 0
+        else:
+            body = f"@mo {self.settings.agent.display_name} was interrupted before the turn could be confirmed. It was not retried automatically."
+            msgtype = "m.notice"
+            agent_turn = 0
+        await self._send(
+            delivery["room_id"],
+            delivery["thread_root"],
+            delivery["reply_to"] or delivery["thread_root"],
+            body,
+            agent_turn,
+            msgtype=msgtype,
+            tx_id=delivery["id"],
+        )
+
+    async def _send(
+        self,
+        room_id: str,
+        root: str,
+        reply_to: str,
+        body: str,
+        agent_turn: int,
+        msgtype: str,
+        tx_id: str | None = None,
+    ) -> None:
         mentioned = []
         for user_id in self.settings.matrix.allowed_users:
             localpart = self._localpart(user_id)
@@ -218,7 +242,7 @@ Message:
                 "m.in_reply_to": {"event_id": reply_to},
             },
         }
-        response = await self.client.room_send(room_id, "m.room.message", content)
+        response = await self.client.room_send(room_id, "m.room.message", content, tx_id=tx_id)
         if getattr(response, "event_id", None) is None:
             raise RuntimeError(f"Matrix send failed: {response}")
 
@@ -228,8 +252,3 @@ Message:
     @staticmethod
     def _localpart(user_id: str) -> str:
         return user_id[1:].split(":", 1)[0]
-
-    @staticmethod
-    def _safe_error(error: Exception) -> str:
-        text = str(error).replace("\n", " ")
-        return text[:300] if text else error.__class__.__name__

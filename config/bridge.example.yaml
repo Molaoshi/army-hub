@@ -23,3 +23,9 @@ policy:
   allow_agent_senders: true
   max_message_chars: 40000
 state_path: /absolute/path/to/ignored/runtime/state.json
+mailbox_path: /absolute/path/to/ignored/runtime/mailbox.sqlite3
+automation:
+  enabled: false
+  body_limit_bytes: 32768
+  runs_per_hour: 30
+  state_dir: /absolute/path/to/ignored/runtime/automation/example-agent
