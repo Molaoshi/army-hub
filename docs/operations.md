@@ -69,6 +69,40 @@ NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
 
 This uses real model turns and posts test messages in `Army Lab`. It checks unmentioned silence, both direct mention paths, threading, a Hermes → DSH → Hermes handoff, and the six-turn stop. Results are written to `.runtime/verification-results.json`.
 
+## Grok connector
+
+Read `docs/grok-connector.md` before changing its protocol or exposure. The default native connector runs on Grok Bot's computer and uses one persistent Bot conversation. The legacy Mac webhook connector is stopped; never run both adapters.
+
+The default transport is the existing private tailnet. Render the ignored remote configuration from the Mac without printing secrets:
+
+```sh
+.venv-service/bin/python scripts/configure_grok_gateway.py --transport tailscale
+```
+
+Transfer it securely to `/home/box/army-hub/.runtime/grok-gateway.yaml`, keep mode `600`, and never expose its plaintext. On Grok Bot's computer, from `/home/box/army-hub`, install and operate Supervisor:
+
+```sh
+sh scripts/install_grok_supervisor.sh
+sh scripts/status_grok_supervisor.sh
+sh scripts/stop_grok_supervisor.sh
+sh scripts/start_grok_supervisor.sh
+```
+
+Supervisor manages and restarts both `army-grok` and `tailscaled`. The installer also enables desktop-login autostart; it does not provide boot-before-login startup. If apt mirrors fail, install Tailscale from its official static package rather than changing proxy or routing settings. Enrollment is a one-time `sudo tailscale up --hostname=grok-bot` through Mo's existing tailnet account.
+
+Cloudflare is stopped rollback-only configuration. To deliberately use it again, render with `--transport cloudflare`, recreate the quick tunnel, securely transfer the regenerated configuration, and restart the remote connector. Stop it with `sh scripts/stop_grok_gateway_matrix_tunnel.sh`. Its URL exposes the bearer-authenticated Matrix Client API and is sensitive.
+
+Run live Matrix acceptance from the Mac:
+
+```sh
+NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost \
+  .venv-service/bin/python scripts/verify_grok_gateway.py
+```
+
+This posts in `Army Lab`, checks unmentioned silence, and proves exact two-turn memory with a fresh marker. Results are `.runtime/grok-gateway-verification-results.json`. Use `scripts/corroborate_grok_gateway.py` remotely to match a completed pair to the fixed Bot's native transcript by exact nonces without printing transcript bodies.
+
+Supervisor automatically restarts either remote program after process death. Desktop-login autostart is installed but has not been tested through an actual logout/login; boot-before-login startup and automatic recovery from total VM replacement are not provided or verified. For webhook rollback, stop the native connector remotely and run `sh scripts/install_grok.sh` on the Mac; `sh scripts/stop_grok.sh` stops the legacy adapter and its MCP tunnel.
+
 ## Agent Manager regression and live acceptance
 
 ```sh

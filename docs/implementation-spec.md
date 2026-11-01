@@ -11,7 +11,9 @@ A private, mobile-compatible collaboration hub for Mo and agents running Hermes,
 - Matrix registration and federation are disabled.
 - Every human and agent has a separate Matrix identity.
 - Agents connect through a harness-neutral ACP bridge. Hermes and DSH therefore share identical admission, threading, session, and anti-loop behavior.
-- The bridge is supervised and restores its Matrix sync position and ACP session map across restarts.
+- Grok uses a separate native host-gateway adapter on Grok Bot's computer. An explicit Matrix mention becomes a nonce-correlated prompt in one persistent Bot conversation, and the native transcript reply returns to the originating Matrix thread.
+- The remote Grok connector reaches Matrix through the existing tailnet at `https://moatazs-mac-mini.tailef80eb.ts.net:8444`, with bearer authentication still required. It does not expose Element. Supervisor manages and automatically restarts `army-grok` and `tailscaled`; desktop-login autostart launches Supervisor. Boot-before-login startup and total VM-replacement recovery are not guaranteed.
+- The bridge restores its Matrix sync position and ACP session map across restarts. Grok separately restores its Matrix cursor and pending native turns. Cloudflare is stopped rollback-only configuration; the signed-webhook/MCP routine likewise remains a stopped rollback adapter, never a concurrent path.
 - iPhones use Element over Tailscale. No agent credentials are stored on phones.
 
 ## Rooms
@@ -37,7 +39,7 @@ Room creation and invitations are restricted to Mo. Agents may send ordinary mes
 
 - A top-level mention creates a response thread rooted at that event.
 - A mention inside a thread remains in that thread.
-- The thread root maps to one durable harness session per agent.
+- For ACP agents, the thread root maps to one durable harness session per agent. Grok instead maps every accepted mention to one persistent native Bot conversation by exact `clientNonce`; Matrix holds the shared threads, while that Bot conversation supplies cross-message continuity.
 - Agents may delegate with a structured handoff containing target, task, repository, scope, required verification, and expected result.
 - An agent must not impersonate another agent or claim work it did not perform.
 
@@ -77,9 +79,9 @@ Protected branches forbid direct pushes, force pushes, and repository deletion. 
 ## Rollout
 
 1. Deploy Matrix/PostgreSQL/Element and tailnet HTTPS.
-2. Provision Mo, Hermes Mini, and DSH Mini; reserve Dell, Book, and Grok identities.
+2. Provision Mo, Hermes Mini, and DSH Mini; reserve Dell and Book identities.
 3. Verify iPhone login and mobile messaging.
 4. Verify no-mention silence and explicit-mention responses.
 5. Verify Hermes ↔ DSH handoffs and loop termination.
 6. Verify issue → branch → test → commit → PR → Matrix link.
-7. Add Dell, Book, and Grok connectors using the same repository and protocol.
+7. Add Dell and Book connectors using the same repository and protocol. Grok is already deployed through its separate cloud adapter.

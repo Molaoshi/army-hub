@@ -2,7 +2,7 @@
 
 ## Current state
 
-Army Hub is a private, tailnet-only Matrix deployment on Mo's Mac mini. Synapse, PostgreSQL, Element Web, and the nightly backup scheduler run in Docker. Hermes Mini and DSH Mini use the same mention-only Matrix-to-ACP bridge.
+Army Hub is a private Matrix deployment on Mo's Mac mini. Synapse, PostgreSQL, Element Web, and the nightly backup scheduler run in Docker. Hermes Mini and DSH Mini use the same mention-only Matrix-to-ACP bridge. Grok uses a separate native host-gateway adapter on Grok Bot's cloud computer and one persistent Bot conversation. It reaches Matrix through the existing tailnet, and Supervisor manages both `army-grok` and `tailscaled`. Cloudflare and the earlier signed-webhook/MCP adapter are stopped and preserved for rollback; never run both Grok adapters together.
 
 Verified on 2026-10-31:
 
@@ -10,6 +10,16 @@ Verified on 2026-10-31:
 - All six provisioned Matrix access tokens passed `whoami` during provisioning.
 - Real ACP turns passed independently for Hermes and DSH.
 - Five live Matrix acceptance tests passed: unmentioned silence, direct Hermes and DSH threaded replies, a Hermes → DSH → Hermes handoff, and the six-turn stop.
+- Native Grok acceptance passed unmentioned silence and two-turn memory; native transcript corroboration matched both turns to one persistent Bot conversation by exact `clientNonce`.
+
+Verified on 2026-11-01:
+
+- Grok Bot's VM is enrolled as `grok-bot` at `100.124.54.69`; remote `tailscale ping` to the mini succeeded and Matrix over the private HTTPS endpoint returned `302`.
+- With Cloudflare stopped, the complete live Matrix acceptance passed again: unmentioned silence and exact two-turn recovery of `ARMY-MEMORY-2cabfac5e81f` without repeating the marker.
+- Supervisor restarted `army-grok` after PID `77939` was terminated; replacement PID `80754` reported `RUNNING`.
+- Supervisor restarted the actual `tailscaled` child after PID `69973` was terminated; replacement PID `81342` reported `RUNNING` and Tailscale returned to backend state `Running`.
+- Stopping Supervisor PID `69968` and starting it again restored both programs to `RUNNING`; Tailscale was `Running` and private Matrix HTTPS returned `302`.
+- The former Cloudflare quick-tunnel process was stopped and no matching process remained.
 - A local backup was created, its 831-entry manifest was checked, and the dump restored into an isolated database containing all three rooms.
 - The Agent Manager passed 25 combined manager/bridge tests plus live Matrix, Keychain, profile/avatar, isolated-restart, and real browser acceptance. Grok and the temporary credential were restored/removed afterward; Hermes and DSH stayed running. Reserved identities cannot be paused, and unsupported credential tests remain `not_tested` rather than reporting false validity.
 
@@ -19,8 +29,8 @@ Verified on 2026-10-31:
 - Matrix: `https://moatazs-mac-mini.tailef80eb.ts.net:8444/`
 - Element: `https://moatazs-mac-mini.tailef80eb.ts.net:8445/`
 - Rooms: `army-lab`, `project-army-hub`, and `approvals`.
-- Active connectors: `hermes-mini`, `dsh-mini`.
-- Reserved identities only: `hermes-dell`, `hermes-book`, `grok`.
+- Active connectors: `hermes-mini`, `dsh-mini`, `grok`.
+- Reserved identities only: `hermes-dell`, `hermes-book`.
 - Runtime secrets, databases, credentials, logs, backups, PID files, and sync state are under ignored `.runtime/`. Agent-specific pasted credentials live in macOS Keychain; metadata contains no secret values.
 
 ## Operating laws
@@ -42,7 +52,7 @@ sh scripts/install_manager.sh
 PYTHONPATH=manager .venv-service/bin/python -m pytest -q manager/tests bridge/tests
 ```
 
-Read `docs/operations.md` before restarting anything, `docs/implementation-spec.md` before changing protocol behavior, and `docs/agent-manager-spec.md` before changing the manager. Read `BACKLOG.md` for deferred work.
+Read `docs/operations.md` before restarting anything, `docs/implementation-spec.md` before changing protocol behavior, `docs/agent-manager-spec.md` before changing the manager, and `docs/grok-connector.md` before operating the Grok integration. Read `BACKLOG.md` for deferred work.
 
 ## Known boundaries
 
@@ -53,5 +63,7 @@ Read `docs/operations.md` before restarting anything, `docs/implementation-spec.
 - Physical iPhone login, cellular messaging, attachments, and background push still need Mo's device. Push is not verified.
 - Interactive ACP tool-permission requests fail closed. Matrix is not yet a tool-approval interface.
 - macOS launchd cannot read this Documents-hosted repository under the current privacy policy. Connectors and the manager start through the authorized desktop session; automatic login startup is deferred rather than weakening TCC.
+- Grok uses one persistent native Bot conversation. Its host gateway is unofficial and version-dependent; live acceptance is required after gateway updates.
+- Supervisor restarts the remote connector and `tailscaled` after process death. Desktop-login autostart is installed, but boot-before-login startup was not tested or provided. Automatic recovery from total VM replacement is not verified; secure re-enrollment and configuration restoration would be required.
 - Off-Mac encrypted backup is not configured.
 - ACP `session/load` recovery after harness-process death has implementation coverage but has not yet received a dedicated live failure-injection test.
