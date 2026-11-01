@@ -168,7 +168,7 @@ class GrokGatewayConnector:
         if not record or record.get("status") == "completed":
             return
         try:
-            if record["status"] == "created":
+            if record["status"] in {"created", "failed"}:
                 observed = await asyncio.to_thread(self.gateway.prompt_observed, nonce)
                 if not observed:
                     prompt = (
@@ -178,6 +178,7 @@ class GrokGatewayConnector:
                     )
                     await asyncio.to_thread(self.gateway.send_prompt, prompt, nonce)
                 record["status"] = "accepted"
+                record.pop("error", None)
                 self.state.save()
             reply = await asyncio.to_thread(self.gateway.wait_for_reply, nonce)
             event_id = await self._send(
@@ -194,7 +195,8 @@ class GrokGatewayConnector:
             self.state.save()
             LOG.info("Delivered native Grok reply for Matrix event %s", record["reply_to"])
         except Exception as error:
-            record["status"] = "failed"
+            if record.get("status") != "accepted":
+                record["status"] = "failed"
             record["error"] = self._safe_error(error)
             self.state.save()
             LOG.exception("Native Grok delivery failed for %s", record["reply_to"])

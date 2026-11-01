@@ -22,6 +22,11 @@ LOG = logging.getLogger(__name__)
 PROTOCOL_KEY = "com.molaoshi.army_hub"
 
 
+def _bounded_turn_delay(last_turn_at: float, interval: float, now: float) -> float:
+    elapsed = now - float(last_turn_at)
+    return min(interval, max(0.0, interval - elapsed))
+
+
 class ConnectorState:
     def __init__(self, path: Path):
         self.path = path
@@ -140,9 +145,13 @@ class GrokConnector:
             await self._send(room_id, root, event_id, "@mo agent turn budget exhausted; further collaboration needs your explicit continuation.", 0, "m.notice")
             return
 
-        elapsed = time.monotonic() - float(self.state.data.get("last_turn_at", 0))
-        if elapsed < self.settings.policy.min_turn_interval_seconds:
-            await asyncio.sleep(self.settings.policy.min_turn_interval_seconds - elapsed)
+        delay = _bounded_turn_delay(
+            self.state.data.get("last_turn_at", 0),
+            self.settings.policy.min_turn_interval_seconds,
+            time.time(),
+        )
+        if delay:
+            await asyncio.sleep(delay)
 
         token = secrets.token_urlsafe(32)
         self.state.data["pending_replies"][token] = {
@@ -153,7 +162,7 @@ class GrokConnector:
             "expires_at": time.time() + self.settings.grok.reply_token_ttl_seconds,
             "used": False,
         }
-        self.state.data["last_turn_at"] = time.monotonic()
+        self.state.data["last_turn_at"] = time.time()
         self.state.save()
         payload = {
             "event": "matrix.message",

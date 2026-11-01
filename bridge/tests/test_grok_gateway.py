@@ -154,3 +154,62 @@ async def test_restart_recovers_created_turn_already_observed_by_gateway(tmp_pat
     await connector.recover_pending()
     gateway.send_prompt.assert_not_called()
     assert connector.state.data["pending_turns"] == {}
+
+
+def persisted_failed_turn(settings: Settings, status: str = "failed") -> None:
+    import json
+    settings.state_path.write_text(json.dumps({"pending_turns": {"nonce": {
+        "status": status, "room_id": "!room:army.local", "thread_root": "$root",
+        "reply_to": "$original", "agent_turn": 1, "sender": "@mo:army.local", "text": "@grok hello",
+    }}}), encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_recovery_resubmits_once_after_preacceptance_failure(tmp_path: Path):
+    settings = connector_settings(tmp_path)
+    persisted_failed_turn(settings, status="created")
+    gateway = Mock()
+    gateway.prompt_observed.return_value = False
+    gateway.send_prompt.side_effect = RuntimeError("connection dropped before acceptance")
+    connector = GrokGatewayConnector(settings, gateway=gateway)
+    connector.client.room_send = AsyncMock(return_value=SimpleNamespace(event_id="$notice"))
+    await connector.recover_pending()
+    assert connector.state.data["pending_turns"]["nonce"]["status"] == "failed"
+    gateway.wait_for_reply.assert_not_called()
+
+    gateway.send_prompt.reset_mock()
+    gateway.send_prompt.side_effect = None
+    gateway.wait_for_reply.return_value = Reply("Recovered", ("reply",), None, False)
+    await connector.recover_pending()
+    gateway.send_prompt.assert_called_once()
+    gateway.wait_for_reply.assert_called_once_with("nonce")
+    assert connector.state.data["pending_turns"] == {}
+
+
+@pytest.mark.asyncio
+async def test_recovery_does_not_duplicate_ambiguous_submission_seen_by_gateway(tmp_path: Path):
+    settings = connector_settings(tmp_path)
+    persisted_failed_turn(settings)
+    gateway = Mock()
+    gateway.prompt_observed.return_value = True
+    gateway.wait_for_reply.return_value = Reply("Recovered", ("reply",), None, False)
+    connector = GrokGatewayConnector(settings, gateway=gateway)
+    connector.client.room_send = AsyncMock(return_value=SimpleNamespace(event_id="$reply"))
+    await connector.recover_pending()
+    gateway.send_prompt.assert_not_called()
+    gateway.wait_for_reply.assert_called_once_with("nonce")
+    assert connector.state.data["pending_turns"] == {}
+
+
+@pytest.mark.asyncio
+async def test_postacceptance_failure_never_returns_turn_to_submission(tmp_path: Path):
+    settings = connector_settings(tmp_path)
+    persisted_failed_turn(settings, status="accepted")
+    gateway = Mock()
+    gateway.wait_for_reply.side_effect = RuntimeError("temporary transcript failure")
+    connector = GrokGatewayConnector(settings, gateway=gateway)
+    connector.client.room_send = AsyncMock(return_value=SimpleNamespace(event_id="$notice"))
+    await connector.recover_pending()
+    assert connector.state.data["pending_turns"]["nonce"]["status"] == "accepted"
+    gateway.send_prompt.assert_not_called()
+    gateway.prompt_observed.assert_not_called()
