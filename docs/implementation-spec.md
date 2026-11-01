@@ -103,7 +103,7 @@ Protected branches forbid direct pushes, force pushes, and repository deletion. 
 ## Backup and recovery
 
 - Nightly PostgreSQL dump plus a versioned copy of Synapse media and signing material.
-- `scripts/backup_mailboxes.py` uses SQLite's online backup API for each top-level `.runtime/*-mailbox.sqlite3`, checks the snapshot with `PRAGMA integrity_check`, and records its size and SHA-256 in `mailboxes/manifest.json`. The nightly backup includes these consistent snapshots; do not copy a live database without its consistent WAL state.
+- `scripts/backup_mailboxes.py` uses SQLite's online backup API for each top-level legacy `.runtime/*-mailbox.sqlite3` and manager-default `.runtime/*-state.mailbox.sqlite3`, deduplicates discovery, checks each snapshot with `PRAGMA integrity_check`, and records its size and SHA-256 in `mailboxes/manifest.json`. A configured runtime with no recognized mailboxes fails loudly. Mailbox state directories are `0700`; the main database and WAL/SHM sidecars are created and maintained as `0600`, including across connection reopen and sidecar recreation. The nightly backup includes these consistent snapshots; do not copy a live database without its consistent WAL state.
 - Keep a local backup and an encrypted off-Mac copy.
 - Restore drills must verify database restore, signing key availability, login, room history, and sending a test message.
 - Bridge state contains no model credentials; Matrix and harness secrets live only in ignored runtime files.

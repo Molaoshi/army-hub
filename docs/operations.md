@@ -46,7 +46,7 @@ Do not use `tailscale serve reset`; it would remove unrelated services. To remov
 
 ## Backups
 
-The `army-backup` container runs `scripts/backup.sh` every night at 03:17 China Standard Time (`19:17 UTC`). A backup contains a PostgreSQL custom-format dump, restore manifest, Synapse signing material/configuration/media, room map, provisioning credentials, bridge state, and consistent online snapshots of every top-level `.runtime/*-mailbox.sqlite3`. The mailbox manifest records byte size, SHA-256, and SQLite `integrity_check`; never copy a live mailbox without preserving a consistent WAL state. Files are owner-only and the latest 14 archives are retained.
+The `army-backup` container runs `scripts/backup.sh` every night at 03:17 China Standard Time (`19:17 UTC`). A backup contains a PostgreSQL custom-format dump, restore manifest, Synapse signing material/configuration/media, room map, provisioning credentials, bridge state, and consistent online snapshots of every top-level legacy `.runtime/*-mailbox.sqlite3` and manager-default `.runtime/*-state.mailbox.sqlite3`. Discovery is deduplicated, and a configured runtime with no recognized mailboxes fails loudly instead of producing a successful empty manifest. The mailbox manifest records byte size, SHA-256, and SQLite `integrity_check`; never copy a live mailbox without preserving a consistent WAL state. State directories are enforced to `0700`; main databases and WAL/SHM sidecars are enforced to `0600` on initialization and writes. Files are owner-only and the latest 14 archives are retained.
 
 Run and inspect a backup manually:
 

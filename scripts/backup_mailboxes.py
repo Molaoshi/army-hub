@@ -11,9 +11,17 @@ import sys
 
 
 def backup_mailboxes(runtime: Path, destination: Path) -> list[dict[str, object]]:
+    source_paths = sorted({
+        *runtime.glob("*-mailbox.sqlite3"),
+        *runtime.glob("*-state.mailbox.sqlite3"),
+    })
+    expected_runtime = any(runtime.glob("*.yaml")) or any(runtime.glob("*-state.json"))
+    if expected_runtime and not source_paths:
+        raise RuntimeError(f"no recognized mailbox databases found in configured runtime {runtime}")
+
     destination.mkdir(parents=True, exist_ok=True)
     records: list[dict[str, object]] = []
-    for source_path in sorted(runtime.glob("*-mailbox.sqlite3")):
+    for source_path in source_paths:
         target_path = destination / source_path.name
         source = sqlite3.connect(f"file:{source_path}?mode=ro", uri=True)
         target = sqlite3.connect(target_path)

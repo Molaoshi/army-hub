@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import stat
+from pathlib import Path
+
 import pytest
 
 from army_bridge.mailbox import (
@@ -103,4 +106,28 @@ def test_automation_limit_survives_restart_and_replay_does_not_consume_quota(tmp
         enqueue(recovered, "three", source="automation", automation_rate_limit=1, now=103)
     _, created = enqueue(recovered, "four", source="automation", automation_rate_limit=1, now=3701)
     assert created is True
+    recovered.close()
+
+
+def test_mailbox_permissions_cover_preexisting_parent_and_recreated_sidecars(tmp_path):
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    runtime.chmod(0o755)
+    path = runtime / "new-agent-state.mailbox.sqlite3"
+
+    mailbox = DurableMailbox(path)
+    enqueue(mailbox, "first")
+    assert stat.S_IMODE(runtime.stat().st_mode) == 0o700
+    for candidate in (path, Path(f"{path}-wal"), Path(f"{path}-shm")):
+        assert candidate.exists()
+        assert stat.S_IMODE(candidate.stat().st_mode) == 0o600
+    mailbox.close()
+
+    runtime.chmod(0o755)
+    recovered = DurableMailbox(path)
+    enqueue(recovered, "second")
+    assert stat.S_IMODE(runtime.stat().st_mode) == 0o700
+    for candidate in (path, Path(f"{path}-wal"), Path(f"{path}-shm")):
+        assert candidate.exists()
+        assert stat.S_IMODE(candidate.stat().st_mode) == 0o600
     recovered.close()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -29,59 +30,81 @@ class AutomationRateLimit(MailboxError):
         self.retry_after = retry_after
 
 
+@contextmanager
+def owner_only_umask() -> Iterator[None]:
+    previous = os.umask(0o077)
+    try:
+        yield
+    finally:
+        os.umask(previous)
+
+
 class DurableMailbox:
     """Small synchronous SQLite store used only from the bridge event loop."""
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
-        self.db.row_factory = sqlite3.Row
-        self.db.execute("PRAGMA journal_mode=WAL")
-        self.db.execute("PRAGMA synchronous=FULL")
-        self.db.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS deliveries (
-                id TEXT PRIMARY KEY,
-                idempotency_key TEXT NOT NULL UNIQUE,
-                source TEXT NOT NULL CHECK(source IN ('matrix', 'automation')),
-                status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'failed', 'interrupted', 'cancelled')),
-                session_key TEXT NOT NULL,
-                prompt TEXT NOT NULL,
-                room_id TEXT,
-                thread_root TEXT,
-                reply_to TEXT,
-                agent_turn INTEGER NOT NULL DEFAULT 0,
-                response TEXT,
-                error TEXT,
-                created_at REAL NOT NULL,
-                updated_at REAL NOT NULL,
-                ended_at REAL,
-                notified_at REAL
-            );
-            CREATE INDEX IF NOT EXISTS deliveries_queue
-                ON deliveries(status, created_at);
-            CREATE INDEX IF NOT EXISTS deliveries_notifications
-                ON deliveries(source, status, notified_at);
-            CREATE TABLE IF NOT EXISTS automation_requests (
-                requested_at REAL NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS automation_requests_time
-                ON automation_requests(requested_at);
-            """
-        )
+        self.path.parent.chmod(0o700)
+        with owner_only_umask():
+            self.db = sqlite3.connect(self.path, timeout=30, isolation_level=None)
+            self.db.row_factory = sqlite3.Row
+            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("PRAGMA synchronous=FULL")
+            self.db.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS deliveries (
+                    id TEXT PRIMARY KEY,
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    source TEXT NOT NULL CHECK(source IN ('matrix', 'automation')),
+                    status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'failed', 'interrupted', 'cancelled')),
+                    session_key TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    room_id TEXT,
+                    thread_root TEXT,
+                    reply_to TEXT,
+                    agent_turn INTEGER NOT NULL DEFAULT 0,
+                    response TEXT,
+                    error TEXT,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    ended_at REAL,
+                    notified_at REAL
+                );
+                CREATE INDEX IF NOT EXISTS deliveries_queue
+                    ON deliveries(status, created_at);
+                CREATE INDEX IF NOT EXISTS deliveries_notifications
+                    ON deliveries(source, status, notified_at);
+                CREATE TABLE IF NOT EXISTS automation_requests (
+                    requested_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS automation_requests_time
+                    ON automation_requests(requested_at);
+                """
+            )
+        self._secure_files()
+
+    def _secure_files(self) -> None:
         self.path.chmod(0o600)
+        for suffix in ("-wal", "-shm"):
+            sidecar = Path(f"{self.path}{suffix}")
+            if sidecar.exists():
+                sidecar.chmod(0o600)
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
-        self.db.execute("BEGIN IMMEDIATE")
         try:
-            yield self.db
-        except Exception:
-            self.db.execute("ROLLBACK")
-            raise
-        else:
-            self.db.execute("COMMIT")
+            with owner_only_umask():
+                self.db.execute("BEGIN IMMEDIATE")
+                try:
+                    yield self.db
+                except Exception:
+                    self.db.execute("ROLLBACK")
+                    raise
+                else:
+                    self.db.execute("COMMIT")
+        finally:
+            self._secure_files()
 
     @staticmethod
     def _delivery(row: sqlite3.Row | None) -> dict[str, Any] | None:
