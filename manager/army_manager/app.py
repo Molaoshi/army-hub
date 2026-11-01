@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 import secrets
 import time
@@ -19,7 +20,7 @@ from .matrix import MatrixClient, MatrixError
 from .provision import Provisioner
 from .store import ManagerStore
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(os.environ.get("ARMY_HUB_ROOT", Path(__file__).resolve().parents[2]))
 STATIC = Path(__file__).resolve().parent / "static"
 store = ManagerStore(ROOT)
 matrix = MatrixClient(ROOT)

@@ -104,23 +104,36 @@ class ConnectorManager:
         self.store.audit("@mo:army.local", agent_id, "connector.start", "started")
         return self.status(agent_id)
 
+    def _wait_for_stop(self, agent_id: str, attempts: int) -> bool:
+        for _ in range(attempts):
+            if not self.pid(agent_id):
+                return True
+            time.sleep(0.1)
+        return not self.pid(agent_id)
+
     def stop(self, agent_id: str, pause: bool = False) -> dict[str, Any]:
         record = self.store.agent(agent_id)
         if record.get("status") == "reserved":
             raise ConnectorError("Reserved identity has no connector to manage")
         pid = self.pid(agent_id)
+        result = "paused" if pause else "stopped"
         if pid:
-            os.kill(pid, signal.SIGTERM)
-            for _ in range(100):
-                if not self.pid(agent_id):
-                    break
-                time.sleep(0.1)
-            if self.pid(agent_id):
-                raise ConnectorError("Connector did not stop within ten seconds")
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            if not self._wait_for_stop(agent_id, 100) and self.pid(agent_id):
+                # start() creates one isolated session per connector; never signal another group.
+                if os.getpgid(pid) != pid:
+                    raise ConnectorError("Connector process group is not isolated; refusing forced shutdown")
+                os.killpg(pid, signal.SIGKILL)
+                result = "paused after forced shutdown" if pause else "stopped after forced shutdown"
+            if not self._wait_for_stop(agent_id, 50):
+                raise ConnectorError("Connector remains active after forced shutdown; PID state retained for retry")
         self.pid_path(agent_id).unlink(missing_ok=True)
         record["status"] = "paused" if pause else record.get("status", "active")
         self.store.put_agent(record)
-        self.store.audit("@mo:army.local", agent_id, "connector.stop", "paused" if pause else "stopped")
+        self.store.audit("@mo:army.local", agent_id, "connector.stop", result)
         return self.status(agent_id)
 
     def restart(self, agent_id: str) -> dict[str, Any]:

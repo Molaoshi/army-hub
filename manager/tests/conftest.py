@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import tempfile
 
 import pytest
 import yaml
 
 
-@pytest.fixture
-def root(tmp_path: Path) -> Path:
-    root = tmp_path / "army-hub"
+def make_root(root: Path) -> Path:
     (root / "agents").mkdir(parents=True)
     (root / "projects").mkdir()
     (root / ".runtime").mkdir()
@@ -29,3 +29,14 @@ def root(tmp_path: Path) -> Path:
         "dsh-mini": {"mxid": "@dsh-mini:army.local", "access_token": "other-secret", "device_id": "two"},
     }))
     return root
+
+
+def pytest_sessionstart(session):
+    # API imports construct their production dependencies; point them only at disposable fixtures.
+    root = make_root(Path(tempfile.mkdtemp(prefix="army-manager-tests-")) / "army-hub")
+    os.environ["ARMY_HUB_ROOT"] = str(root)
+
+
+@pytest.fixture
+def root(tmp_path: Path) -> Path:
+    return make_root(tmp_path / "army-hub")
