@@ -8,8 +8,8 @@ A private, mobile-compatible collaboration hub for Mo and agents running Hermes,
 
 - This specification governs only the `army-hub` repository and runtime. `openbot-hub` is a separate project and is not part of this build.
 - Matrix is the canonical shared conversation history. Element is the current conversation client; Agent Manager is the administration interface. The loopback automation API is for machine-to-agent control, not a second human chat history.
-- The immediate milestone is dependable daily collaboration on Mo's actual desktop and phone with Hermes, DSH, and Grok: signed-in access, room history, mentions, replies, reconnection, and no duplicate turns.
-- Do not introduce another chat UI, transport, or lazy-tool build until this daily-use path is explicitly verified. Later features must be added to this architecture rather than decided ad hoc during implementation.
+- Dependable daily collaboration remains the baseline: signed-in access, room history, mentions, replies, reconnection, and no duplicate turns. Signed-in access and real Hermes/DSH/Grok mention checks passed on 2026-11-02; remaining physical-phone attachment, cellular, and closed-app push checks remain open independently.
+- Do not introduce another chat UI or transport. Later features must be added to this architecture rather than decided ad hoc during implementation. Lazy tool discovery is now specified separately in `docs/lazy-tool-discovery-spec.md`; that document is a proposed plan, not implemented production behavior.
 
 ## Architecture
 
