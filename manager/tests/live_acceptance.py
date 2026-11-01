@@ -25,8 +25,26 @@ def main() -> None:
         headers = {"X-CSRF-Token": csrf}
         inventory = client.get("/api/inventory")
         assert inventory.status_code == 200, inventory.text
-        assert {item["id"] for item in inventory.json()["harnesses"]["mini"]} == {"hermes", "dsh"}
-        assert len(inventory.json()["rooms"]) == 3
+        discovered = inventory.json()
+        harnesses = {item["id"]: item for item in discovered["harnesses"]["mini"]}
+        assert {"hermes", "dsh", "opencode", "grok"}.issubset(harnesses)
+        assert harnesses["grok"]["adapter"] == "native-remote" and not harnesses["grok"]["creatable"]
+        dsh_models = discovered["models"]["mini"]["dsh"]
+        assert {item["id"] for item in dsh_models} == {"deepseek-v4-pro", "deepseek-flash"}
+        assert all(item["efforts"] == ["off", "low", "high", "max"] for item in dsh_models)
+        assert all(item["selectable"] for item in dsh_models)
+        hermes_models = discovered["models"]["mini"]["hermes"]
+        assert {item["provider"] for item in hermes_models} >= {"deepseek", "kimi-coding", "kimi-coding-cn"}
+        assert all(item["selectable"] for item in hermes_models)
+        assert not any(item["provider"] == "custom:litellm-gateway" for item in hermes_models)
+        opencode_models = discovered["models"]["mini"]["opencode"]
+        assert opencode_models, "OpenCode must expose native-connected, ACP-usable models"
+        assert all(item["selectable"] for item in opencode_models)
+        assert not any(item["provider"].startswith("kimi-code-plan") for item in opencode_models)
+        minimax = next(item for item in opencode_models if item["id"] == "ollama-cloud/minimax-m3.1-flash")
+        assert {"low", "medium", "high", "xhigh", "max"}.issubset(minimax["efforts"])
+        assert discovered["discovery"]["opencode"]["status"] == "live"
+        assert len(discovered["rooms"]) == 3
 
         source = Image.new("RGB", (900, 500), (22, 120, 128))
         buffer = io.BytesIO()
@@ -62,6 +80,7 @@ def main() -> None:
     print(json.dumps({
         "matrix_login": "passed", "inventory": "passed", "avatar_upload_and_proxy": "passed",
         "keychain_add_list_delete": "passed", "working_connectors_untouched": "passed",
+        "hermes_model_count": len(hermes_models), "opencode_model_count": len(opencode_models),
         "reserved_profile_restored": True,
     }, indent=2))
 

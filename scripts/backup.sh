@@ -17,6 +17,10 @@ cp -R "$ROOT/.runtime/synapse" "$WORK/synapse"
 cp "$ROOT/.runtime/rooms.json" "$WORK/rooms.json"
 cp "$ROOT/.runtime/credentials.json" "$WORK/credentials.json"
 cp "$ROOT/.runtime/matrix-secrets.json" "$WORK/matrix-secrets.json"
+python3 "$ROOT/scripts/backup_mailboxes.py" "$ROOT/.runtime" "$WORK/mailboxes"
+for state in "$ROOT"/.runtime/*-state.json; do
+  [ ! -e "$state" ] || cp "$state" "$WORK/"
+done
 
 tar -C "$ROOT/.runtime/backups" -czf "$ROOT/.runtime/backups/army-hub-$STAMP.tar.gz" "$STAMP"
 rm -rf "$WORK"

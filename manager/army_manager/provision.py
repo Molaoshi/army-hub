@@ -20,12 +20,21 @@ class Provisioner:
         machine = payload.get("machine")
         harness = payload.get("harness")
         model = payload.get("model")
+        provider = payload.get("provider")
         project = payload.get("project")
-        if harness not in {item["id"] for item in self.inventory.harnesses(machine)}:
-            raise ValueError("Selected harness is unavailable on this machine")
-        models = {item["id"]: item for item in self.inventory.models(machine, harness)}
-        if model not in models:
-            raise ValueError("Selected model is unavailable for this harness")
+        harness_records = {item["id"]: item for item in self.inventory.harnesses(machine)}
+        if harness not in harness_records or not harness_records[harness].get("creatable", True):
+            raise ValueError("Selected harness is unavailable for provisioning on this machine")
+        records = self.inventory.models(machine, harness)
+        matches = [item for item in records if item["id"] == model and (provider is None or item["provider"] == provider)]
+        if len(matches) != 1:
+            raise ValueError("Selected provider and model combination is unavailable for this harness")
+        selected = matches[0]
+        if selected.get("stale"):
+            raise ValueError("Live provider/model revalidation failed; refresh successfully before provisioning")
+        if selected.get("selectable") is False:
+            raise ValueError(selected.get("availability_reason") or "Selected provider and model are unavailable")
+        provider = selected["provider"]
         if project not in {item["id"] for item in self.inventory.projects(machine)}:
             raise ValueError("Selected project is unavailable on this machine")
         available_rooms = {item["id"] for item in self.matrix.rooms()}
@@ -33,9 +42,9 @@ class Provisioner:
         if not rooms or not set(rooms).issubset(available_rooms):
             raise ValueError("Select at least one valid Matrix room")
         effort = payload.get("effort")
-        if effort and effort not in models[model]["efforts"]:
+        if effort and effort not in selected["efforts"]:
             raise ValueError("Selected effort is unsupported")
-        return {"machine": machine, "harness": harness, "model": model,
+        return {"machine": machine, "harness": harness, "provider": provider, "model": model,
                 "effort": effort, "project": project, "rooms": rooms}
 
     def validate(self, payload: dict[str, Any]) -> dict[str, Any]:

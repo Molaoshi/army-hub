@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented for the current Mini/Hermes/DSH scope and deployed tailnet-only on port 8446. Live browser, Matrix profile/avatar, Keychain, and isolated connector acceptance passed on 2026-10-31. Real creation of an additional agent remains intentionally untested until Mo approves the new identity and paid model turn. Effort stays hidden without a verified ACP setter; Dell and Book remain unenrolled.
+Implemented for Mini with Hermes, DSH, and OpenCode ACP provisioning and deployed tailnet-only on port 8446. Discovery uses real per-harness capabilities, provider/model pairs are validated together, and model/effort settings are applied and verified through each native path. Grok remains an existing native-remote connector rather than a creatable local ACP option. Real creation of an additional Matrix identity and its first paid turn remains separately gated; Dell and Book remain unenrolled.
 
 ## Goal
 
@@ -22,7 +22,7 @@ Element remains the conversation client. Agents connect to Matrix; the Agent Man
 
 ## Current boundary
 
-Army Hub currently has active Hermes Mini and DSH Mini connectors configured through files and scripts. Dell, Book, and Grok identities are reserved. The existing system has no browser-based agent creation, live capability discovery, model/effort editor, or credential manager.
+Army Hub has active Hermes Mini and DSH Mini ACP connectors plus Grok's separate native remote connector. Dell and Book identities remain reserved. Browser-based creation, live capability discovery, model/effort editing, and credential management are implemented; creation of another paid identity still requires Mo's explicit acceptance gate.
 
 ## Primary workflow: create an agent
 
@@ -79,9 +79,13 @@ Each option shows:
 - Provider
 - Model ID and friendly label where available
 - Text/vision or other relevant capability labels when known
-- Availability/staleness state
+- Native-catalog and ACP verification status; discovery failures retain a sanitized status and last-success timestamp
 
-Model discovery must not require a paid completion. Use provider model-list APIs or local inventories where available, with a cached fallback clearly marked as possibly stale. Do not hard-code a universal model roster.
+Model discovery must not require a paid completion. Use temporary ACP sessions, provider model-list APIs, or local inventories where available. Do not hard-code a universal model roster. Failed discovery returns no cached model choices: stale and unavailable entries stay hidden in both create and edit forms, while status metadata explains the failed refresh. Backend provisioning revalidates every submitted pair.
+
+Hermes intersects every provider's refreshed native `model.options` roster with exact ACP-applied selections. OpenCode does the same against connected providers and active, enabled models from its native provider/model APIs; its ACP runtime receives the same sanitized provider configuration during discovery and connector execution. Raw native responses and provider settings are not cached.
+
+Hermes custom providers are checked through their configured `/models` endpoints without credentials. Any HTTP response establishes reachability; a timeout or connection failure hides the corresponding choices. This is only a reachability check, not proof of credential validity or a successful paid completion. Non-custom providers retain the narrower `acp-verified` status unless they receive their own real health check.
 
 ### Effort
 
@@ -89,7 +93,8 @@ Shown only when both the selected harness and model support an effort/reasoning 
 
 - Options come from adapter-reported capabilities, such as Low, Medium, or High.
 - The UI stores the harness-native value, not an invented generic translation.
-- If unsupported, the field is omitted.
+- Hermes, DSH, and OpenCode use their native ACP session configuration. DSH exposes `off`, `low`, `high`, and `max` through its `effort` option for both DeepSeek Official models.
+- If unsupported or the selected model is unavailable, the field is omitted.
 - If the model changes, effort is revalidated.
 
 ### Project/workspace
@@ -268,7 +273,7 @@ Each enrolled node exposes a small local inventory interface consumed by the Age
 
 Matrix room discovery comes from Synapse/Matrix, not from node disk scans.
 
-Inventory responses are cached with timestamps. The UI offers **Refresh** and marks stale or unavailable data. Creation with stale critical data requires fresh revalidation.
+Successful sanitized inventories are cached with timestamps for failure diagnostics only. The UI offers **Refresh** and reports stale or unavailable discovery without rendering cached choices. Creation always requires fresh revalidation.
 
 ## Security and audit
 

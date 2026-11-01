@@ -49,6 +49,13 @@ for agent_id, harness in (("hermes-mini", "hermes"), ("dsh-mini", "dsh")):
             "max_message_chars": 40000,
         },
         "state_path": str(RUNTIME / f"{agent_id}-state.json"),
+        "mailbox_path": str(RUNTIME / f"{agent_id}-mailbox.sqlite3"),
+        "automation": {
+            "enabled": False,
+            "body_limit_bytes": 32768,
+            "runs_per_hour": 30,
+            "state_dir": str(RUNTIME / "automation" / agent_id),
+        },
     }
     config_path = RUNTIME / f"{agent_id}.yaml"
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")

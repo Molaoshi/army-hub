@@ -24,6 +24,7 @@ class AgentSettings:
     command: list[str]
     cwd: str
     environment: dict[str, str] = field(default_factory=dict)
+    session_config: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -36,11 +37,21 @@ class PolicySettings:
 
 
 @dataclass(frozen=True)
+class AutomationSettings:
+    enabled: bool = False
+    body_limit_bytes: int = 32_768
+    runs_per_hour: int = 30
+    state_dir: Path | None = None
+
+
+@dataclass(frozen=True)
 class Settings:
     matrix: MatrixSettings
     agent: AgentSettings
     policy: PolicySettings
     state_path: Path
+    mailbox_path: Path | None = None
+    automation: AutomationSettings = field(default_factory=AutomationSettings)
 
 
 def load_settings(path: str | Path) -> Settings:
@@ -49,9 +60,17 @@ def load_settings(path: str | Path) -> Settings:
     matrix = raw["matrix"]
     agent = raw["agent"]
     policy = raw.get("policy", {})
-    state_path = Path(raw.get("state_path", config_path.parent / "bridge-state.json"))
-    if not state_path.is_absolute():
-        state_path = config_path.parent / state_path
+    automation = raw.get("automation", {})
+
+    def resolved_path(value: Any, default: Path) -> Path:
+        candidate = Path(value) if value is not None else default
+        return candidate if candidate.is_absolute() else config_path.parent / candidate
+
+    state_path = resolved_path(raw.get("state_path"), config_path.parent / "bridge-state.json")
+    mailbox_path = resolved_path(raw.get("mailbox_path"), state_path.with_suffix(".mailbox.sqlite3"))
+    automation_dir = resolved_path(
+        automation.get("state_dir"), state_path.parent / "automation" / agent["id"]
+    )
     return Settings(
         matrix=MatrixSettings(
             homeserver=matrix["homeserver"].rstrip("/"),
@@ -67,7 +86,15 @@ def load_settings(path: str | Path) -> Settings:
             command=[str(part) for part in agent["command"]],
             cwd=agent["cwd"],
             environment={str(k): str(v) for k, v in agent.get("environment", {}).items()},
+            session_config={str(k): str(v) for k, v in agent.get("session_config", {}).items() if v},
         ),
         policy=PolicySettings(**policy),
         state_path=state_path,
+        mailbox_path=mailbox_path,
+        automation=AutomationSettings(
+            enabled=bool(automation.get("enabled", False)),
+            body_limit_bytes=int(automation.get("body_limit_bytes", 32_768)),
+            runs_per_hour=int(automation.get("runs_per_hour", 30)),
+            state_dir=automation_dir,
+        ),
     )

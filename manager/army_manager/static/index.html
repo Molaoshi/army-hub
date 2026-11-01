@@ -64,7 +64,7 @@
         <form id="create-form" class="create-layout">
           <div class="form-sections">
             <section class="form-section"><div class="section-number">01</div><div class="section-body"><h2>Identity</h2><p>Name the worker, not the model. The Matrix ID is generated for you.</p><label>Display name<input id="create-name" placeholder="Researcher" maxlength="80" required><small id="agent-id-preview">Matrix ID will appear here</small></label></div></section>
-            <section class="form-section"><div class="section-number">02</div><div class="section-body"><h2>Runtime</h2><p>Options narrow as you choose. Unavailable combinations never reach the harness.</p><div class="field-grid"><label>Machine<select id="create-machine" required></select></label><label>Harness<select id="create-harness" required></select></label><label>Model<select id="create-model" required></select></label><label id="effort-field" class="hidden">Effort<select id="create-effort"></select></label></div><div id="runtime-note" class="inline-note"></div></div></section>
+            <section class="form-section"><div class="section-number">02</div><div class="section-body"><h2>Runtime</h2><p>Options narrow as you choose. Unavailable combinations never reach the harness.</p><div class="field-grid"><label>Machine<select id="create-machine" required></select></label><label>Harness<select id="create-harness" required></select></label><label>Provider / model<select id="create-model" required></select></label><label id="effort-field" class="hidden">Effort<select id="create-effort"></select></label></div><div id="runtime-note" class="inline-note"></div></div></section>
             <section class="form-section"><div class="section-number">03</div><div class="section-body"><h2>Work & collaboration</h2><p>Give the agent a registered workspace and the rooms where it may be mentioned.</p><label>Project / workspace<select id="create-project" required></select></label><fieldset><legend>Matrix rooms</legend><div id="create-rooms" class="room-options"></div></fieldset></div></section>
           </div>
           <aside class="create-review"><p class="eyebrow">Ready when you are</p><h2>Provisioning checks</h2><ol><li>Revalidate live capabilities</li><li>Create a private Matrix identity</li><li>Join selected rooms</li><li>Start one supervised connector</li></ol><div id="create-review-summary" class="review-summary">Choose a runtime to see the plan.</div><button class="button primary full" type="submit">Create agent <span>→</span></button><p class="fine-print">No agent is marked ready until Matrix and its connector answer.</p></aside>
@@ -81,6 +81,6 @@
     <div id="panel-scrim" class="panel-scrim hidden"></div>
   </div>
   <div id="toast-region" class="toast-region" aria-live="polite"></div>
-  <script src="/app.js" defer></script>
+  <script src="/app.js?v=20261102-native-inventory" defer></script>
 </body>
 </html>

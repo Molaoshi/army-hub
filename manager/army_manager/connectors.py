@@ -10,6 +10,7 @@ from typing import Any
 
 import yaml
 
+from .inventory import opencode_cli, opencode_runtime_environment
 from .store import ManagerStore
 
 
@@ -48,12 +49,30 @@ class ConnectorManager:
     def render_config(self, record: dict[str, Any], matrix_record: dict[str, Any]) -> None:
         agent_id = record["id"]
         all_users = ["@mo:army.local", *[item["mxid"] for item in self.store.agents() if item["id"] != agent_id]]
+        session_config: dict[str, str] = {}
         if record["harness"] == "hermes":
             command = [str(Path.home() / ".local" / "bin" / "hermes"), "acp"]
             environment = {"HERMES_ACCEPT_HOOKS": "1", "HERMES_INFERENCE_MODEL": record["model"]}
+            session_config = {"model": f"{record.get('provider') or 'auto'}:{record['model']}"}
+            if record.get("effort"):
+                session_config["reasoning_effort"] = record["effort"]
         elif record["harness"] == "dsh":
+            if record.get("provider") not in {None, "deepseek-official"}:
+                raise ConnectorError("DSH currently supports only its DeepSeek Official provider")
             command = [str(self.workspace / ".runtime" / "dsh-acp.sh")]
-            environment = {"NO_BROWSER": "1"}
+            environment = {"NO_BROWSER": "1", "DSH_MODEL": record["model"]}
+            session_config = {"model": f"deepseek-official::{record['model']}"}
+            if record.get("effort"):
+                session_config["effort"] = record["effort"]
+        elif record["harness"] == "opencode":
+            cli = opencode_cli()
+            if not cli:
+                raise ConnectorError("OpenCode CLI is unavailable")
+            command = [str(cli), "acp"]
+            environment = opencode_runtime_environment({})
+            session_config = {"model": record["model"]}
+            if record.get("effort"):
+                session_config["effort"] = record["effort"]
         else:
             raise ConnectorError("Unsupported harness")
         project = next((item for item in yaml.safe_load((self.root / "projects" / "registry.yaml").read_text())["projects"].items()
@@ -70,7 +89,7 @@ class ConnectorManager:
                 "allowed_users": all_users, "allowed_rooms": record["rooms"],
             },
             "agent": {"id": agent_id, "display_name": record["display_name"], "command": command,
-                      "cwd": cwd, "environment": environment},
+                      "cwd": cwd, "environment": environment, "session_config": session_config},
             "policy": {"max_agent_turns": 6, "min_turn_interval_seconds": 2,
                        "prompt_timeout_seconds": 600, "allow_agent_senders": True, "max_message_chars": 40000},
             "state_path": str(self.runtime / f"{agent_id}-state.json"),
