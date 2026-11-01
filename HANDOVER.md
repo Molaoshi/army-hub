@@ -87,4 +87,4 @@ Read `docs/operations.md` before restarting anything, `docs/implementation-spec.
 - Off-Mac encrypted backup is not configured.
 - ACP `session/load` recovery after harness-process death has implementation coverage but has not yet received a dedicated live failure-injection test.
 - Local automation has no ACP provider-history backfill, and cancellation of an already-running turn is not verified. Buzz has not yet been configured to use the API.
-- Lazy tool discovery, Matrix approvals/human takeover, reviewed memory consolidation, and pinned runtimes/canary upgrades remain unimplemented.
+- Lazy tool discovery has an offline baseline and a passing isolated Hermes native MCP canary (`docs/lazy-tool-discovery-hermes-canary.md`), with no live connector changes and no paid model turns. The DSH facade, Matrix approvals/human takeover, reviewed memory consolidation, and pinned runtimes/canary upgrades remain unimplemented.
