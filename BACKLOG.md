@@ -11,6 +11,7 @@
 
 ## Later
 
+- Review and, only with a separate implementation `xdf`, execute `docs/lazy-tool-discovery-spec.md`: measure schema/usage baselines, canary Hermes' existing native deferred tools, then add the read-only DSH MCP facade. Do not build a parallel Hermes dispatcher, include DSH-native tools, enable OpenCode/Grok, or weaken the current approval cancellation.
 - Add native-catalog drift acceptance after Hermes and OpenCode upgrades: compare connected provider/model/effort rosters with exact ACP application, and fail closed without exposing cached choices when discovery is stale or unsuccessful.
 - Add native-gateway failure-injection coverage for tailnet interruption, gateway updates, restart between acceptance and transcript reply, and persistent-conversation recovery after deeper interruptions; remote process-death recovery is already verified. Retain separate webhook rollback tests.
 - Test desktop-login autostart after a remote logout/login and document secure recovery after total VM replacement; neither is currently verified, and boot-before-login startup is not provided.
